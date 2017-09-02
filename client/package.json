@@ -1,16 +1,27 @@
 {
   "name": "vbscript-language-server-client",
   "displayName": "VBScript",
-  "description": "VBScript symbols",
+  "description": "VBScript language support",
   "author": "Microsoft Corporation",
   "license": "MIT",
   "version": "0.0.2",
   "publisher": "andreaslenzen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Luncher91/VBScript-vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/Luncher91/VBScript-vscode/issues"
+  },
+  "homepage": "https://github.com/Luncher91/VBScript-vscode/blob/master/README.md",  
   "engines": {
     "vscode": "^1.8.0"
   },
   "categories": [
-    "Other"
+    "Languages", "Linters"
+  ],
+  "keywords": [
+    "VBS", "VBScript", "Language", "Symbol"
   ],
   "activationEvents": [
     "onLanguage:vbs"

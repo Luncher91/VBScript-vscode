@@ -1,5 +1,11 @@
+# VBScript symbols extension
+
 This extension provides symbols for VBScript.
 
-Pressing Ctrl + Shift + O lists all symbols of the current file.
+Pressing <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd> lists all symbols of the current file.
 
-You can display Symbols by using extensions like "Code Outline".
+You also can display symbols by using extensions like "Code Outline" by Patryk Zawadzki.
+
+---
+
+[GitHub](https://github.com/Luncher91/VBScript-vscode)
