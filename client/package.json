@@ -4,7 +4,7 @@
   "author": "Microsoft Corporation",
   "license": "MIT",
   "version": "0.0.1",
-  "publisher": "vscode",
+  "publisher": "andreaslenzen",
   "engines": {
     "vscode": "^1.8.0"
   },
