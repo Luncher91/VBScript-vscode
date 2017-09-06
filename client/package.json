@@ -2,7 +2,7 @@
   "name": "vbscript-language-server-client",
   "displayName": "VBScript",
   "description": "VBScript language support",
-  "author": "Microsoft Corporation",
+  "author": "Andreas Lenzen",
   "license": "MIT",
   "version": "0.0.2",
   "publisher": "andreaslenzen",

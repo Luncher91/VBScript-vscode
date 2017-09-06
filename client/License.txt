@@ -1,4 +1,4 @@
-Copyright (c) Microsoft Corporation
+Copyright (c) Andreas Lenzen
 
 All rights reserved. 
 
