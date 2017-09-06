@@ -21,7 +21,7 @@
     "Languages", "Linters"
   ],
   "keywords": [
-    "VBS", "VBScript", "Language", "Symbol"
+    "VBS", "VBScript", "Language", "Symbol", "Functionlist"
   ],
   "activationEvents": [
     "onLanguage:vbs"
@@ -57,7 +57,7 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "devDependencies": {
-    "@types/node": "^6.0.52",
+    "@types/node": "^8.0.26",
     "typescript": "^2.1.5",
     "vscode": "^1.0.3"
   },

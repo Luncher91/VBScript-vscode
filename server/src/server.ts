@@ -4,25 +4,14 @@
  * ------------------------------------------------------------------------------------------ */
 'use strict';
 
-import {
-	IPCMessageReader, IPCMessageWriter,
-	createConnection, IConnection, TextDocumentSyncKind,
-	TextDocuments, TextDocument, Diagnostic, DiagnosticSeverity,
-	InitializeParams, InitializeResult, TextDocumentPositionParams,
-	CompletionItem, CompletionItemKind
-} from 'vscode-languageserver';
-
-import {
-	DocumentSymbolParams, SymbolInformation, SymbolKind, Range,
-	Position
-} from 'vscode-languageserver-types';
+import * as ls from 'vscode-languageserver';
 
 // Create a connection for the server. The connection uses Node's IPC as a transport
-let connection: IConnection = createConnection(new IPCMessageReader(process), new IPCMessageWriter(process));
+let connection: ls.IConnection = ls.createConnection(new ls.IPCMessageReader(process), new ls.IPCMessageWriter(process));
 
 // Create a simple text document manager. The text document manager
 // supports full document sync only
-let documents: TextDocuments = new TextDocuments();
+let documents: ls.TextDocuments = new ls.TextDocuments();
 // Make the text document manager listen on the connection
 // for open, change and close text document events
 documents.listen(connection);
@@ -30,7 +19,7 @@ documents.listen(connection);
 // After the server has started the client sends an initialize request. The server receives
 // in the passed params the rootPath of the workspace plus the client capabilities. 
 let workspaceRoot: string;
-connection.onInitialize((params): InitializeResult => {
+connection.onInitialize((params): ls.InitializeResult => {
 	workspaceRoot = params.rootPath;
 	return {
 		capabilities: {
@@ -71,95 +60,245 @@ connection.onDidChangeWatchedFiles((change) => {
 
 let t: Thenable<string>;
 
-connection.onDocumentSymbol((docParams: DocumentSymbolParams): SymbolInformation[] => {
-	let symbolsList: SymbolInformation[] = [];
+connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
+	let symbolsList: ls.SymbolInformation[] = [];
 
 	CollectSymbols(documents.get(docParams.textDocument.uri), symbolsList);
 	
 	return symbolsList;
 });
 
-function CollectSymbols(document: TextDocument, symbols: SymbolInformation[]): void {
+function CollectSymbols(document: ls.TextDocument, symbols: ls.SymbolInformation[]): void {
 	let lines = document.getText().split(/\r?\n/g);
 	let problems = 0;
 
 	for (var i = 0; i < lines.length && problems < maxNumberOfProblems; i++) {
 		let line = lines[i];
-		let newSym = FindSymbol(line, i, document.uri);
-		
-		if(newSym != null)
-		{
-			symbols.push(newSym);
-		}
+
+		let containsComment = line.indexOf("'");
+		if(containsComment > -1)
+			line = line.substring(0, containsComment);
+
+		line = ReplaceStringLiterals(line);
+		let statements = SplitStatements(line);
+
+		statements.forEach(statement => {
+			let newSym = FindSymbol(statement, i, document.uri);
+			if(newSym != null)
+			{
+				symbols.push(newSym);
+			}
+		});
 	}
 }
 
-function FindSymbol(line: string, lineNumber: number, uri: string) : SymbolInformation {
-	let functionStartRegex:RegExp = /^ *(public +|private +)?function +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?/gi;
-	let subStartRegex:RegExp = /^ *(public +|private +)?sub +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?/gi;
+function SplitStatements(line: string) {
+	let statements: string[] = line.split(":");
+	let offset = 0;
 
+	for (var i = 0; i < statements.length; i++) {
+		statements[i] = " ".repeat(offset) + statements[i];
+		offset = statements[i].length + 1;
+	}
+
+	return statements;
+}
+
+function ReplaceStringLiterals(line:string) : string {
+	let stringLiterals = /\"(([^\"]|\"\")*)\"/gi;
+	return line.replace(stringLiterals, ReplaceBySpaces);
+}
+
+function ReplaceBySpaces(match: string) : string {
+	return " ".repeat(match.length);
+}
+
+function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation {
 	let newSym;
-	newSym = GetSimpleSymbol(functionStartRegex, line, lineNumber, uri);
-	if(newSym != null)
-		return newSym;
+	
+	if(GetMethodStart(statement, lineNumber, uri))
+		return null;
 
-	newSym = GetSimpleSymbol(subStartRegex, line, lineNumber, uri);
+	newSym = GetMethodSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
 	
-	newSym = GetPropertySymbol(line, lineNumber, uri);
-	if(newSym != null)
-		return newSym;
-
-	if(IsStartClass(line, lineNumber, uri))
+	if(GetPropertyStart(statement, lineNumber, uri))
 		return null;
 
-	newSym = GetClassSymbol(line, lineNumber, uri);
+	newSym = GetPropertySymbol(statement, lineNumber, uri);;
+	if(newSym != null)
+		return newSym;
+	
+	if(GetClassStart(statement, lineNumber, uri))
+		return null;
+	
+	newSym = GetClassSymbol(statement, lineNumber, uri);
+	if(newSym != null)
+		return newSym;
+	
+	newSym = GetMemberSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
 
-	newSym = GetMemberSymbol(line, lineNumber, uri);
+	newSym = GetVariableSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
 }
 
 let openClassName : string = null;
-let openClassStart : Position = Position.create(-1, -1);
+let openClassStart : ls.Position = ls.Position.create(-1, -1);
 
-function GetSimpleSymbol(rex: RegExp, line: string, lineNumber: number, uri: string) : SymbolInformation {
+interface IOpenMethod {
+	visibility: string;
+	type: string;
+	name: string;
+	args: string;
+	startPosition: ls.Position;
+	nameLocation: ls.Location;
+}
+
+let openMethod: IOpenMethod = null;
+
+function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
+	let rex:RegExp = /^ *(public +|private +)?(function|sub) +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))? *$/gi;
 	let regexResult = rex.exec(line);
 	
-	if(regexResult == null || regexResult.length < 5)
+	if(regexResult == null || regexResult.length < 6)
+		return;
+	
+	if(openMethod == null) {
+		openMethod = {
+			visibility: regexResult[1],
+			type: regexResult[2],
+			name: regexResult[3],
+			args: regexResult[5],
+			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
+			nameLocation: ls.Location.create(uri, ls.Range.create(
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3])), 
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
+		};
+		return true;
+	} else {
+		// ERROR!!! I expected "end function|sub"!
+	}
+
+	return false;
+}
+
+function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation{
+	let classEndRegex:RegExp = /^ *end +(function|sub) *$/gi;
+
+	let regexResult = classEndRegex.exec(line);
+	
+	if(regexResult == null || regexResult.length < 2)
 		return null;
-	
-	let visibility = regexResult[1];
-	let name = regexResult[2];
-	let functionArgs = regexResult[4];
-	
-	let range: Range = Range.create(Position.create(lineNumber, 0), Position.create(lineNumber, regexResult[0].length))
-	let symbol: SymbolInformation = SymbolInformation.create(name + " (" + (functionArgs || "") + ")", SymbolKind.Function, range, uri, openClassName);
+
+	let type = regexResult[1];
+
+	if(openMethod == null) {
+		// ERROR!!! I cannot close any method!
+		return null;
+	}
+
+	if(type != openMethod.type) {
+		// ERROR!!! I expected end function|sub and not sub|function!
+		// show the user the error and then go on like it was the right type!
+	}
+
+	let range: ls.Range = ls.Range.create(openMethod.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
+		openMethod.name + " (" + (openMethod.args || "") + ")", 
+		(openClassName == null ? ls.SymbolKind.Function : ls.SymbolKind.Method), 
+		range,
+		uri,
+		openClassName);
+	openMethod = null;
+
 	return symbol;
 }
 
-function GetPropertySymbol(line: string, lineNumber: number, uri: string) : SymbolInformation {
-	let propertyStartRegex:RegExp = /^ *(public +|private +)?property +(let +|set +|get +)([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?/gi;
+function GetNumberOfFrontSpaces(line: string): number {
+	let counter: number = 0;
+	
+	for (var i = 0; i < line.length; i++) {
+		var char = line[i];
+		if(char == " " || char == "\t")
+			counter++;
+		else
+			break;
+	}
+	
+	return counter;
+}
+
+interface IOpenProperty {
+	visibility: string;
+	type: string;
+	name: string;
+	args: string;
+	startPosition: ls.Position;
+	nameLocation: ls.Location;
+}
+
+let openProperty: IOpenProperty = null;
+
+function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
+	let propertyStartRegex:RegExp = /^ *(public +|private +)?property +(let +|set +|get +)([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))? *$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 	
-	if(regexResult == null || regexResult.length < 4)
+	if(regexResult == null || regexResult.length < 6)
 		return null;
 	
-	let visibility = regexResult[1];
-	let propertyKind = regexResult[2];
-	let name = regexResult[3];
-	let propertyArgs = regexResult[4];
+	if(openProperty == null) {
+		openProperty = {
+			visibility: regexResult[1],
+			type: regexResult[2],
+			name: regexResult[3],
+			args: regexResult[5],
+			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
+			nameLocation: ls.Location.create(uri, ls.Range.create(
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3])), 
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
+		};
+
+		return true;
+	} else {
+		// ERROR!!! I expected "end function|sub"!
+	}
+
+	return false;
+}
+
+function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation{
+	let classEndRegex:RegExp = /^ *end +property *$/gi;
 	
-	let range: Range = Range.create(Position.create(lineNumber, 0), Position.create(lineNumber, regexResult[0].length))
-	let symbol: SymbolInformation = SymbolInformation.create(propertyKind + " " + name + " " + (propertyArgs || ""), SymbolKind.Property, range, uri, openClassName);
+	let regexResult = classEndRegex.exec(statement);
+	
+	if(regexResult == null || regexResult.length < 1)
+		return null;
+	
+	if(openProperty == null) {
+		// ERROR!!! I cannot close any method!
+		return null;
+	}
+	
+	// range of the whole definition
+	let range: ls.Range = ls.Range.create(openProperty.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(statement) + regexResult[0].trim().length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
+		openProperty.type + "" +  openProperty.name + " (" + (openProperty.args || "") + ")", 
+		ls.SymbolKind.Property, 
+		range,
+		uri,
+		openClassName);
+
+	openProperty = null;
+
 	return symbol;
 }
 
-function GetMemberSymbol(line: string, lineNumber: number, uri: string) : SymbolInformation {
-	let memberStartRegex:RegExp = /^ *(public +|private +)([a-zA-Z0-9\-\_]+) *($|\:|\')/gi;
+function GetMemberSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+	let memberStartRegex:RegExp = /^ *(public +|private +)([a-zA-Z0-9\-\_]+) *$/gi;
 	let regexResult = memberStartRegex.exec(line);
 	
 	if(regexResult == null || regexResult.length < 3)
@@ -167,14 +306,34 @@ function GetMemberSymbol(line: string, lineNumber: number, uri: string) : Symbol
 	
 	let visibility = regexResult[1];
 	let name = regexResult[2];
-	
-	let range: Range = Range.create(Position.create(lineNumber, 0), Position.create(lineNumber, regexResult[0].length))
-	let symbol: SymbolInformation = SymbolInformation.create(name, SymbolKind.Field, range, uri, openClassName);
+	let intendention = GetNumberOfFrontSpaces(line);
+
+	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Field, range, uri, openClassName);
 	return symbol;
 }
 
-function IsStartClass(line: string, lineNumber: number, uri: string) : boolean {
-	let classStartRegex:RegExp = /^ *class +([a-zA-Z0-9\-\_]+)/gi;
+function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+	if(openClassName != null || openMethod != null || openProperty != null)
+		return null;
+
+	let memberStartRegex:RegExp = /^ *(dim +)([a-zA-Z0-9\-\_]+) *$/gi;
+	let regexResult = memberStartRegex.exec(line);
+	
+	if(regexResult == null || regexResult.length < 3)
+		return null;
+	
+	let visibility = regexResult[1];
+	let name = regexResult[2];
+	let intendention = GetNumberOfFrontSpaces(line);
+
+	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Variable, range, uri, null);
+	return symbol;
+}
+
+function GetClassStart(line: string, lineNumber: number, uri: string) : boolean {
+	let classStartRegex:RegExp = /^ *class +([a-zA-Z0-9\-\_]+) *$/gi;
 	let regexResult = classStartRegex.exec(line);
 	
 	if(regexResult == null || regexResult.length < 2)
@@ -182,26 +341,34 @@ function IsStartClass(line: string, lineNumber: number, uri: string) : boolean {
 	
 	let name = regexResult[1];
 	openClassName = name;
-	openClassStart = Position.create(lineNumber, 0);
+	openClassStart = ls.Position.create(lineNumber, 0);
 	
 	return true;
 }
 
-function GetClassSymbol(line: string, lineNumber: number, uri: string) : SymbolInformation {
-	let classEndRegex:RegExp = /^ *end +class( |$)/gi;
+function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+	let classEndRegex:RegExp = /^ *end +class *$/gi;
 	if(openClassName == null)
 		return null;
+
+	if(openMethod != null) {
+		// ERROR! expected to close method before!
+	}
+
+	if(openProperty != null) {
+		// ERROR! expected to close property before!
+	}
 
 	let regexResult = classEndRegex.exec(line);
 	
 	if(regexResult == null || regexResult.length < 1)
 		return null;
 
-	let range: Range = Range.create(openClassStart, Position.create(lineNumber, regexResult[0].length))
-	let symbol: SymbolInformation = SymbolInformation.create(openClassName, SymbolKind.Class, range, uri);
+	let range: ls.Range = ls.Range.create(openClassStart, ls.Position.create(lineNumber, regexResult[0].length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(openClassName, ls.SymbolKind.Class, range, uri);
 
 	openClassName = null;
-	openClassStart = Position.create(-1, -1);
+	openClassStart = ls.Position.create(-1, -1);
 
 	return symbol;
 }
