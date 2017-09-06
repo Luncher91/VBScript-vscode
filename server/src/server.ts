@@ -183,6 +183,10 @@ function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.Sym
 	newSym = GetVariableSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
+	
+	newSym = GetConstantSymbol(statement, lineNumber, uri);
+	if(newSym != null)
+		return newSym;
 }
 
 let openClassName : string = null;
@@ -368,6 +372,25 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.S
 
 	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
 	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Variable, range, uri, null);
+	return symbol;
+}
+
+function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+	if(openMethod != null || openProperty != null)
+		return null;
+	
+	let memberStartRegex:RegExp = /^ *(public +|private +)?const +([a-zA-Z0-9\-\_]+) *\=.*$/gi;
+	let regexResult = memberStartRegex.exec(line);
+	
+	if(regexResult == null || regexResult.length < 3)
+		return null;
+	
+	let visibility = regexResult[1];
+	let name = regexResult[2];
+	let intendention = GetNumberOfFrontSpaces(line);
+
+	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Constant, range, uri, openClassName);
 	return symbol;
 }
 
