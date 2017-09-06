@@ -79,9 +79,7 @@ function RefreshDocumentsSymbols(uri: string) {
 }
 
 function GetSymbolsOfDocument(uri: string) : ls.SymbolInformation[] {
-	if(symbolCache[uri] == null)
-		RefreshDocumentsSymbols(uri);
-
+	RefreshDocumentsSymbols(uri);
 	return symbolCache[uri];
 }
 
