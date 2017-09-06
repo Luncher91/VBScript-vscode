@@ -32,7 +32,7 @@ connection.onInitialize((params): ls.InitializeResult => {
 
 // The content of a text document has changed. This event is emitted
 // when the text document first opened or when its content has changed.
-documents.onDidChangeContent((change) => {
+documents.onDidChangeContent((change: ls.TextDocumentChangeEvent) => {
 });
 
 // The settings interface describe the server relevant settings part
@@ -50,22 +50,63 @@ interface ExampleSettings {
 let maxNumberOfProblems: number;
 // The settings have changed. Is send on server activation
 // as well.
-connection.onDidChangeConfiguration((change) => {
+connection.onDidChangeConfiguration((change: ls.DidChangeConfigurationParams) => {
 	let settings = <Settings>change.settings;
 	maxNumberOfProblems = settings.vbsLanguageServer.maxNumberOfProblems || 100;
 });
 
-connection.onDidChangeWatchedFiles((change) => {
+connection.onDidChangeWatchedFiles((changeParams: ls.DidChangeWatchedFilesParams) => {
+	for (var i = 0; i < changeParams.changes.length; i++) {
+		var event = changeParams.changes[i];
+		
+		switch(event.type) {
+		 case ls.FileChangeType.Changed:
+		 case ls.FileChangeType.Created:
+			RefreshDocumentsSymbols(event.uri);
+			break;
+		case ls.FileChangeType.Deleted:
+			symbolCache[event.uri] = null;
+			break;
+		}
+	}
 });
+
+let symbolCache: { [id: string] : ls.SymbolInformation[]; } = {}; 
+function RefreshDocumentsSymbols(uri: string) {
+	let symbolsList: ls.SymbolInformation[] = [];
+	CollectSymbols(documents.get(uri), symbolsList);
+	symbolCache[uri] = symbolsList;
+}
+
+function GetSymbolsOfDocument(uri: string) : ls.SymbolInformation[] {
+	if(symbolCache[uri] == null)
+		RefreshDocumentsSymbols(uri);
+
+	return symbolCache[uri];
+}
+
+function GetWorkspaceSymbols(query: string) : ls.SymbolInformation[] {
+	let symbolsList: ls.SymbolInformation[] = [];
+
+	for(let key in symbolCache) {
+		for (var i = 0; i < symbolCache[key].length; i++) {
+			var symbol = symbolCache[key][i];
+			if(SymbolMatchesQuery(symbol, query))
+				symbolsList.push(symbol);
+		}
+	}
+	
+	return symbolsList;
+}
+
+function SymbolMatchesQuery(symbol: ls.SymbolInformation, query: string): boolean {
+	return symbol.name.indexOf(query) > -1;
+}
 
 let t: Thenable<string>;
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
-	let symbolsList: ls.SymbolInformation[] = [];
-
-	CollectSymbols(documents.get(docParams.textDocument.uri), symbolsList);
-	
-	return symbolsList;
+	return GetSymbolsOfDocument(docParams.textDocument.uri);
 });
 
 function CollectSymbols(document: ls.TextDocument, symbols: ls.SymbolInformation[]): void {
