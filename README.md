@@ -20,6 +20,11 @@ You also can display symbols by using extensions like "Code Outline" by Patryk Z
 
 - A multiline (seperated by an underscore _ ) definition will not be recognized.
 
+
+## Fixed issues
+
+- You can now indent with tabulation and the extension will still work.
+
 ---
 
 [GitHub](https://github.com/Luncher91/VBScript-vscode)
