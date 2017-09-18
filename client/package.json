@@ -1,10 +1,10 @@
 {
   "name": "vbscript-language-server-client",
-  "displayName": "VBScript",
-  "description": "VBScript language support",
+  "displayName": "VBScript symbols",
+  "description": "VBScript symbol support",
   "author": "Andreas Lenzen",
   "license": "MIT",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "andreaslenzen",
   "repository": {
     "type": "git",
@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/Luncher91/VBScript-vscode/issues"
   },
-  "homepage": "https://github.com/Luncher91/VBScript-vscode/blob/master/README.md",  
+  "homepage": "https://github.com/Luncher91/VBScript-vscode/blob/master/README.md",
   "engines": {
     "vscode": "^1.8.0"
   },
@@ -46,7 +46,7 @@
           ],
           "default": "off",
           "description": "Traces the communication between VSCode and the VBScriptLanguageServer service."
-        }        
+        }
       }
     }
   },

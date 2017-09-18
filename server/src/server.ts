@@ -17,7 +17,7 @@ let documents: ls.TextDocuments = new ls.TextDocuments();
 documents.listen(connection);
 
 // After the server has started the client sends an initialize request. The server receives
-// in the passed params the rootPath of the workspace plus the client capabilities. 
+// in the passed params the rootPath of the workspace plus the client capabilities.
 let workspaceRoot: string;
 connection.onInitialize((params): ls.InitializeResult => {
 	workspaceRoot = params.rootPath;
@@ -58,7 +58,7 @@ connection.onDidChangeConfiguration((change: ls.DidChangeConfigurationParams) =>
 connection.onDidChangeWatchedFiles((changeParams: ls.DidChangeWatchedFilesParams) => {
 	for (var i = 0; i < changeParams.changes.length; i++) {
 		var event = changeParams.changes[i];
-		
+
 		switch(event.type) {
 		 case ls.FileChangeType.Changed:
 		 case ls.FileChangeType.Created:
@@ -71,7 +71,7 @@ connection.onDidChangeWatchedFiles((changeParams: ls.DidChangeWatchedFilesParams
 	}
 });
 
-let symbolCache: { [id: string] : ls.SymbolInformation[]; } = {}; 
+let symbolCache: { [id: string] : ls.SymbolInformation[]; } = {};
 function RefreshDocumentsSymbols(uri: string) {
 	let symbolsList: ls.SymbolInformation[] = [];
 	CollectSymbols(documents.get(uri), symbolsList);
@@ -93,7 +93,7 @@ function GetWorkspaceSymbols(query: string) : ls.SymbolInformation[] {
 				symbolsList.push(symbol);
 		}
 	}
-	
+
 	return symbolsList;
 }
 
@@ -154,28 +154,28 @@ function ReplaceBySpaces(match: string) : string {
 
 function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation {
 	let newSym;
-	
+
 	if(GetMethodStart(statement, lineNumber, uri))
 		return null;
 
 	newSym = GetMethodSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
-	
+
 	if(GetPropertyStart(statement, lineNumber, uri))
 		return null;
 
 	newSym = GetPropertySymbol(statement, lineNumber, uri);;
 	if(newSym != null)
 		return newSym;
-	
+
 	if(GetClassStart(statement, lineNumber, uri))
 		return null;
-	
+
 	newSym = GetClassSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
-	
+
 	newSym = GetMemberSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
@@ -183,7 +183,7 @@ function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.Sym
 	newSym = GetVariableSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
-	
+
 	newSym = GetConstantSymbol(statement, lineNumber, uri);
 	if(newSym != null)
 		return newSym;
@@ -204,12 +204,12 @@ interface IOpenMethod {
 let openMethod: IOpenMethod = null;
 
 function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
-	let rex:RegExp = /^ *(public +|private +)?(function|sub) +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))? *$/gi;
+	let rex:RegExp = /^[ \t]*(public +|private +)?(function|sub) +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?[ \t]*$/gi;
 	let regexResult = rex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 6)
 		return;
-	
+
 	if(openMethod == null) {
 		openMethod = {
 			visibility: regexResult[1],
@@ -218,7 +218,7 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 			args: regexResult[5],
 			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3])), 
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
 		};
 		return true;
@@ -230,10 +230,10 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 }
 
 function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation{
-	let classEndRegex:RegExp = /^ *end +(function|sub) *$/gi;
+	let classEndRegex:RegExp = /^[ \t]*end +(function|sub)[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 2)
 		return null;
 
@@ -251,8 +251,8 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.Sym
 
 	let range: ls.Range = ls.Range.create(openMethod.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
 	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
-		openMethod.name + " (" + (openMethod.args || "") + ")", 
-		(openClassName == null ? ls.SymbolKind.Function : ls.SymbolKind.Method), 
+		openMethod.name + " (" + (openMethod.args || "") + ")",
+		(openClassName == null ? ls.SymbolKind.Function : ls.SymbolKind.Method),
 		range,
 		uri,
 		openClassName);
@@ -263,7 +263,7 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.Sym
 
 function GetNumberOfFrontSpaces(line: string): number {
 	let counter: number = 0;
-	
+
 	for (var i = 0; i < line.length; i++) {
 		var char = line[i];
 		if(char == " " || char == "\t")
@@ -271,7 +271,7 @@ function GetNumberOfFrontSpaces(line: string): number {
 		else
 			break;
 	}
-	
+
 	return counter;
 }
 
@@ -287,12 +287,12 @@ interface IOpenProperty {
 let openProperty: IOpenProperty = null;
 
 function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
-	let propertyStartRegex:RegExp = /^ *(public +|private +)?property +(let +|set +|get +)([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))? *$/gi;
+	let propertyStartRegex:RegExp = /^[ \t]*(public +|private +)?property +(let +|set +|get +)([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 6)
 		return null;
-	
+
 	if(openProperty == null) {
 		openProperty = {
 			visibility: regexResult[1],
@@ -301,7 +301,7 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 			args: regexResult[5],
 			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3])), 
+				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
 		};
 
@@ -314,23 +314,23 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 }
 
 function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation{
-	let classEndRegex:RegExp = /^ *end +property *$/gi;
-	
+	let classEndRegex:RegExp = /^[ \t]*end +property[ \t]*$/gi;
+
 	let regexResult = classEndRegex.exec(statement);
-	
+
 	if(regexResult == null || regexResult.length < 1)
 		return null;
-	
+
 	if(openProperty == null) {
 		// ERROR!!! I cannot close any method!
 		return null;
 	}
-	
+
 	// range of the whole definition
 	let range: ls.Range = ls.Range.create(openProperty.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(statement) + regexResult[0].trim().length))
 	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
-		openProperty.type + "" +  openProperty.name + " (" + (openProperty.args || "") + ")", 
-		ls.SymbolKind.Property, 
+		openProperty.type + "" +  openProperty.name + " (" + (openProperty.args || "") + ")",
+		ls.SymbolKind.Property,
 		range,
 		uri,
 		openClassName);
@@ -341,12 +341,12 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 }
 
 function GetMemberSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	let memberStartRegex:RegExp = /^ *(public +|private +)([a-zA-Z0-9\-\_]+) *$/gi;
+	let memberStartRegex:RegExp = /^[ \t]*(public +|private +)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 3)
 		return null;
-	
+
 	let visibility = regexResult[1];
 	let name = regexResult[2];
 	let intendention = GetNumberOfFrontSpaces(line);
@@ -360,12 +360,12 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.S
 	if(openClassName != null || openMethod != null || openProperty != null)
 		return null;
 
-	let memberStartRegex:RegExp = /^ *(dim +)([a-zA-Z0-9\-\_]+) *$/gi;
+	let memberStartRegex:RegExp = /^[ \t]*(dim +)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 3)
 		return null;
-	
+
 	let visibility = regexResult[1];
 	let name = regexResult[2];
 	let intendention = GetNumberOfFrontSpaces(line);
@@ -378,13 +378,13 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.S
 function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
 	if(openMethod != null || openProperty != null)
 		return null;
-	
-	let memberStartRegex:RegExp = /^ *(public +|private +)?const +([a-zA-Z0-9\-\_]+) *\=.*$/gi;
+
+	let memberStartRegex:RegExp = /^[ \t]*(public +|private +)?const +([a-zA-Z0-9\-\_]+) *\=.*$/gi;
 	let regexResult = memberStartRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 3)
 		return null;
-	
+
 	let visibility = regexResult[1];
 	let name = regexResult[2];
 	let intendention = GetNumberOfFrontSpaces(line);
@@ -395,21 +395,21 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.S
 }
 
 function GetClassStart(line: string, lineNumber: number, uri: string) : boolean {
-	let classStartRegex:RegExp = /^ *class +([a-zA-Z0-9\-\_]+) *$/gi;
+	let classStartRegex:RegExp = /^[ \t]*class +([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = classStartRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 2)
 		return false;
-	
+
 	let name = regexResult[1];
 	openClassName = name;
 	openClassStart = ls.Position.create(lineNumber, 0);
-	
+
 	return true;
 }
 
 function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	let classEndRegex:RegExp = /^ *end +class *$/gi;
+	let classEndRegex:RegExp = /^[ \t]*end +class[ \t]*$/gi;
 	if(openClassName == null)
 		return null;
 
@@ -422,7 +422,7 @@ function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.Symb
 	}
 
 	let regexResult = classEndRegex.exec(line);
-	
+
 	if(regexResult == null || regexResult.length < 1)
 		return null;
 
