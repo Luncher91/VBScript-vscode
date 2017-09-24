@@ -23,7 +23,7 @@ You also can display symbols by using extensions like "Code Outline" by Patryk Z
 
 ## Fixed issues
 
-- Intendetion using tab does now work as well
+- Indentation using tab does now work as well
 
 ---
 
