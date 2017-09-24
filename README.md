@@ -23,7 +23,7 @@ You also can display symbols by using extensions like "Code Outline" by Patryk Z
 
 ## Fixed issues
 
-- You can now indent with tabulation and the extension will still work.
+- Intendetion using tab does now work as well
 
 ---
 
