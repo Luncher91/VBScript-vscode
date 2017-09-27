@@ -204,7 +204,7 @@ interface IOpenMethod {
 let openMethod: IOpenMethod = null;
 
 function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
-	let rex:RegExp = /^[ \t]*(public +|private +)?(function|sub) +([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?[ \t]*$/gi;
+	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = rex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -230,7 +230,7 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 }
 
 function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation{
-	let classEndRegex:RegExp = /^[ \t]*end +(function|sub)[ \t]*$/gi;
+	let classEndRegex:RegExp = /^[ \t]*end[ \t]+(function|sub)[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(line);
 
@@ -287,7 +287,7 @@ interface IOpenProperty {
 let openProperty: IOpenProperty = null;
 
 function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
-	let propertyStartRegex:RegExp = /^[ \t]*(public +|private +)?property +(let +|set +|get +)([a-zA-Z0-9\-\_]+) *(\(([a-zA-Z0-9\_\-, ]*)\))?[ \t]*$/gi;
+	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?property[ \t]+(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -314,7 +314,7 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 }
 
 function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation{
-	let classEndRegex:RegExp = /^[ \t]*end +property[ \t]*$/gi;
+	let classEndRegex:RegExp = /^[ \t]*end[ \t]+property[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(statement);
 
@@ -341,7 +341,7 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 }
 
 function GetMemberSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	let memberStartRegex:RegExp = /^[ \t]*(public +|private +)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
+	let memberStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 3)
@@ -360,7 +360,7 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.S
 	if(openClassName != null || openMethod != null || openProperty != null)
 		return null;
 
-	let memberStartRegex:RegExp = /^[ \t]*(dim +)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
+	let memberStartRegex:RegExp = /^[ \t]*(dim[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 3)
@@ -379,7 +379,7 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.S
 	if(openMethod != null || openProperty != null)
 		return null;
 
-	let memberStartRegex:RegExp = /^[ \t]*(public +|private +)?const +([a-zA-Z0-9\-\_]+) *\=.*$/gi;
+	let memberStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?const[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*\=.*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 3)
@@ -395,7 +395,7 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.S
 }
 
 function GetClassStart(line: string, lineNumber: number, uri: string) : boolean {
-	let classStartRegex:RegExp = /^[ \t]*class +([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
+	let classStartRegex:RegExp = /^[ \t]*class[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = classStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 2)
@@ -409,7 +409,7 @@ function GetClassStart(line: string, lineNumber: number, uri: string) : boolean 
 }
 
 function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	let classEndRegex:RegExp = /^[ \t]*end +class[ \t]*$/gi;
+	let classEndRegex:RegExp = /^[ \t]*end[ \t]+class[ \t]*$/gi;
 	if(openClassName == null)
 		return null;
 
