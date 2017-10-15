@@ -5,6 +5,13 @@
 'use strict';
 
 import * as ls from 'vscode-languageserver';
+import { VBSSymbol } from "./VBSSymbols/VBSSymbol";
+import { VBSMethodSymbol } from './VBSSymbols/VBSMethodSymbol';
+import { VBSPropertySymbol } from './VBSSymbols/VBSPropertySymbol';
+import { VBSClassSymbol } from './VBSSymbols/VBSClassSymbol';
+import { VBSMemberSymbol } from './VBSSymbols/VBSMemberSymbol';
+import { VBSVariableSymbol } from './VBSSymbols/VBSVariableSymbol';
+import { VBSConstantSymbol } from './VBSSymbols/VBSConstantSymbol';
 
 // Create a connection for the server. The connection uses Node's IPC as a transport
 let connection: ls.IConnection = ls.createConnection(new ls.IPCMessageReader(process), new ls.IPCMessageWriter(process));
@@ -25,7 +32,11 @@ connection.onInitialize((params): ls.InitializeResult => {
 		capabilities: {
 			// Tell the client that the server works in FULL text document sync mode
 			textDocumentSync: documents.syncKind,
-			documentSymbolProvider: true
+			documentSymbolProvider: true,
+			// Tell the client that the server support code complete
+			completionProvider: {
+				resolveProvider: true
+			}
 		}
 	}
 });
@@ -35,29 +46,9 @@ connection.onInitialize((params): ls.InitializeResult => {
 documents.onDidChangeContent((change: ls.TextDocumentChangeEvent) => {
 });
 
-// The settings interface describe the server relevant settings part
-interface Settings {
-	vbsLanguageServer: ExampleSettings;
-}
-
-// These are the example settings we defined in the client's package.json
-// file
-interface ExampleSettings {
-	maxNumberOfProblems: number;
-}
-
-// hold the maxNumberOfProblems setting
-let maxNumberOfProblems: number;
-// The settings have changed. Is send on server activation
-// as well.
-connection.onDidChangeConfiguration((change: ls.DidChangeConfigurationParams) => {
-	let settings = <Settings>change.settings;
-	maxNumberOfProblems = settings.vbsLanguageServer.maxNumberOfProblems || 100;
-});
-
 connection.onDidChangeWatchedFiles((changeParams: ls.DidChangeWatchedFilesParams) => {
-	for (var i = 0; i < changeParams.changes.length; i++) {
-		var event = changeParams.changes[i];
+	for (let i = 0; i < changeParams.changes.length; i++) {
+		let event = changeParams.changes[i];
 
 		switch(event.type) {
 		 case ls.FileChangeType.Changed:
@@ -71,47 +62,67 @@ connection.onDidChangeWatchedFiles((changeParams: ls.DidChangeWatchedFilesParams
 	}
 });
 
-let symbolCache: { [id: string] : ls.SymbolInformation[]; } = {};
-function RefreshDocumentsSymbols(uri: string) {
-	let symbolsList: ls.SymbolInformation[] = [];
-	CollectSymbols(documents.get(uri), symbolsList);
-	symbolCache[uri] = symbolsList;
-}
+// This handler provides the initial list of the completion items.
+connection.onCompletion((_textDocumentPosition: ls.TextDocumentPositionParams): ls.CompletionItem[] => {
+	return SelectCompletionItems(_textDocumentPosition);
+	// The pass parameter contains the position of the text document in
+	// which code complete got requested. For the example we ignore this
+	// info and always provide the same completion items.
+	/*return [
+		{
+			label: 'TypeScript',
+			kind: ls.CompletionItemKind.Text,
+			data: 1
+		},
+		{
+			label: 'JavaScript',
+			kind: ls.CompletionItemKind.Text,
+			data: 2
+		}
+	]*/
+});
 
 function GetSymbolsOfDocument(uri: string) : ls.SymbolInformation[] {
 	RefreshDocumentsSymbols(uri);
-	return symbolCache[uri];
+	return VBSSymbol.GetLanguageServerSymbols(symbolCache[uri]);
 }
 
-function GetWorkspaceSymbols(query: string) : ls.SymbolInformation[] {
-	let symbolsList: ls.SymbolInformation[] = [];
-
-	for(let key in symbolCache) {
-		for (var i = 0; i < symbolCache[key].length; i++) {
-			var symbol = symbolCache[key][i];
-			if(SymbolMatchesQuery(symbol, query))
-				symbolsList.push(symbol);
-		}
-	}
-
-	return symbolsList;
+function SelectCompletionItems(textDocumentPosition: ls.TextDocumentPositionParams): ls.CompletionItem[] {
+	let symbols = symbolCache[textDocumentPosition.textDocument.uri];
+	let ci: ls.CompletionItem = ls.CompletionItem.create("hello world!");
+	let scopeSymbols = GetSymbolsOfScope(symbols, textDocumentPosition.position);
+	return null;
 }
 
-function SymbolMatchesQuery(symbol: ls.SymbolInformation, query: string): boolean {
-	return symbol.name.indexOf(query) > -1;
+function GetSymbolsOfScope(symbols: VBSSymbol[], position: ls.Position): VBSSymbol[] {
+	// sort by start positition
+	let sortedSymbols: VBSSymbol[] = symbols.sort(function(a: VBSSymbol, b: VBSSymbol){
+		let diff = a.symbolRange.start.line - b.symbolRange.start.line;
+		
+		if(diff != 0)
+			return diff;
+
+		return a.symbolRange.start.character - b.symbolRange.start.character;
+	});
+
+	return null;
 }
 
-let t: Thenable<string>;
+let symbolCache: { [id: string] : VBSSymbol[]; } = {};
+function RefreshDocumentsSymbols(uri: string) {
+	let symbolsList: VBSSymbol[] = [];
+	CollectSymbols(documents.get(uri), symbolsList);
+	symbolCache[uri] = symbolsList;
+}
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
 	return GetSymbolsOfDocument(docParams.textDocument.uri);
 });
 
-function CollectSymbols(document: ls.TextDocument, symbols: ls.SymbolInformation[]): void {
+function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 	let lines = document.getText().split(/\r?\n/g);
-	let problems = 0;
 
-	for (var i = 0; i < lines.length && problems < maxNumberOfProblems; i++) {
+	for (var i = 0; i < lines.length; i++) {
 		let line = lines[i];
 
 		let containsComment = line.indexOf("'");
@@ -152,8 +163,8 @@ function ReplaceBySpaces(match: string) : string {
 	return " ".repeat(match.length);
 }
 
-function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	let newSym;
+function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol {
+	let newSym: VBSSymbol;
 
 	if(GetMethodStart(statement, lineNumber, uri))
 		return null;
@@ -192,7 +203,7 @@ function FindSymbol(statement: string, lineNumber: number, uri: string) : ls.Sym
 let openClassName : string = null;
 let openClassStart : ls.Position = ls.Position.create(-1, -1);
 
-interface IOpenMethod {
+class OpenMethod {
 	visibility: string;
 	type: string;
 	name: string;
@@ -201,7 +212,7 @@ interface IOpenMethod {
 	nameLocation: ls.Location;
 }
 
-let openMethod: IOpenMethod = null;
+let openMethod: OpenMethod = null;
 
 function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
 	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
@@ -229,7 +240,7 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 	return false;
 }
 
-function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation{
+function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSMethodSymbol{
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+(function|sub)[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(line);
@@ -250,12 +261,16 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : ls.Sym
 	}
 
 	let range: ls.Range = ls.Range.create(openMethod.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
-		openMethod.name + " (" + (openMethod.args || "") + ")",
-		(openClassName == null ? ls.SymbolKind.Function : ls.SymbolKind.Method),
-		range,
-		uri,
-		openClassName);
+	
+	let symbol: VBSMethodSymbol = new VBSMethodSymbol();
+	symbol.visibility = openMethod.visibility;
+	symbol.type = openMethod.type;
+	symbol.name = openMethod.name;
+	symbol.args = openMethod.args;
+	symbol.nameLocation = openMethod.nameLocation;
+	symbol.parentName = openClassName;
+	symbol.symbolRange = range;
+
 	openMethod = null;
 
 	return symbol;
@@ -275,7 +290,7 @@ function GetNumberOfFrontSpaces(line: string): number {
 	return counter;
 }
 
-interface IOpenProperty {
+class OpenProperty {
 	visibility: string;
 	type: string;
 	name: string;
@@ -284,7 +299,7 @@ interface IOpenProperty {
 	nameLocation: ls.Location;
 }
 
-let openProperty: IOpenProperty = null;
+let openProperty: OpenProperty = null;
 
 function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
 	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?property[ \t]+(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
@@ -313,7 +328,7 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 	return false;
 }
 
-function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : ls.SymbolInformation{
+function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : VBSPropertySymbol{
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+property[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(statement);
@@ -328,19 +343,22 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 
 	// range of the whole definition
 	let range: ls.Range = ls.Range.create(openProperty.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(statement) + regexResult[0].trim().length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(
-		openProperty.type + "" +  openProperty.name + " (" + (openProperty.args || "") + ")",
-		ls.SymbolKind.Property,
-		range,
-		uri,
-		openClassName);
+	
+	let symbol = new VBSPropertySymbol()
+	symbol.type = openProperty.type;
+	symbol.name = openProperty.name;
+	symbol.args = openProperty.args;
+	symbol.symbolRange = range;
+	symbol.nameLocation = openProperty.nameLocation;
+	symbol.parentName = openClassName;
+	symbol.symbolRange = range;
 
 	openProperty = null;
 
 	return symbol;
 }
 
-function GetMemberSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMemberSymbol {
 	let memberStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
@@ -350,32 +368,70 @@ function GetMemberSymbol(line: string, lineNumber: number, uri: string) : ls.Sym
 	let visibility = regexResult[1];
 	let name = regexResult[2];
 	let intendention = GetNumberOfFrontSpaces(line);
+	let nameStartIndex = line.indexOf(line);
 
 	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Field, range, uri, openClassName);
+	
+	let symbol: VBSMemberSymbol = new VBSMemberSymbol();
+	symbol.visibility = visibility;
+	symbol.type = "";
+	symbol.name = name;
+	symbol.args = "";
+	symbol.symbolRange = range;
+	symbol.nameLocation = ls.Location.create(uri, 
+		ls.Range.create(
+			ls.Position.create(lineNumber, nameStartIndex),
+			ls.Position.create(lineNumber, nameStartIndex + name.length)
+		)
+	);
+	symbol.parentName = openClassName;
+
 	return symbol;
 }
 
-function GetVariableSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
-	if(openClassName != null || openMethod != null || openProperty != null)
-		return null;
-
+function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSVariableSymbol {
 	let memberStartRegex:RegExp = /^[ \t]*(dim[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 3)
 		return null;
 
+	// (dim[ \t]+)
 	let visibility = regexResult[1];
 	let name = regexResult[2];
 	let intendention = GetNumberOfFrontSpaces(line);
+	let nameStartIndex = line.indexOf(line);
 
 	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Variable, range, uri, null);
+	let parentName: string = "";
+
+	if(openClassName != null)
+		parentName = openClassName;
+
+	if(openMethod != null)
+		parentName = openMethod.name;
+
+	if(openProperty != null)
+		parentName = openProperty.name;
+
+	let symbol: VBSVariableSymbol = new VBSVariableSymbol();
+	symbol.visibility = "";
+	symbol.type = "";
+	symbol.name = name;
+	symbol.args = "";
+	symbol.symbolRange = range;
+	symbol.nameLocation = ls.Location.create(uri, 
+		ls.Range.create(
+			ls.Position.create(lineNumber, nameStartIndex),
+			ls.Position.create(lineNumber, nameStartIndex + name.length)
+		)
+	);
+	symbol.parentName = parentName;
+
 	return symbol;
 }
 
-function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSConstantSymbol {
 	if(openMethod != null || openProperty != null)
 		return null;
 
@@ -386,11 +442,40 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : ls.S
 		return null;
 
 	let visibility = regexResult[1];
-	let name = regexResult[2];
+	if(visibility != null)
+		visibility = visibility.trim();
+
+	let name = regexResult[2].trim();
 	let intendention = GetNumberOfFrontSpaces(line);
+	let nameStartIndex = line.indexOf(line);
 
 	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(name, ls.SymbolKind.Constant, range, uri, openClassName);
+	
+	let parentName: string = "";
+	
+	if(openClassName != null)
+		parentName = openClassName;
+
+	if(openMethod != null)
+		parentName = openMethod.name;
+
+	if(openProperty != null)
+		parentName = openProperty.name;
+
+	let symbol: VBSConstantSymbol = new VBSConstantSymbol();
+	symbol.visibility = visibility;
+	symbol.type = "";
+	symbol.name = name;
+	symbol.args = "";
+	symbol.symbolRange = range;
+	symbol.nameLocation = ls.Location.create(uri, 
+		ls.Range.create(
+			ls.Position.create(lineNumber, nameStartIndex),
+			ls.Position.create(lineNumber, nameStartIndex + name.length)
+		)
+	);
+	symbol.parentName = parentName;
+
 	return symbol;
 }
 
@@ -408,7 +493,7 @@ function GetClassStart(line: string, lineNumber: number, uri: string) : boolean 
 	return true;
 }
 
-function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.SymbolInformation {
+function GetClassSymbol(line: string, lineNumber: number, uri: string) : VBSClassSymbol {
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+class[ \t]*$/gi;
 	if(openClassName == null)
 		return null;
@@ -427,35 +512,21 @@ function GetClassSymbol(line: string, lineNumber: number, uri: string) : ls.Symb
 		return null;
 
 	let range: ls.Range = ls.Range.create(openClassStart, ls.Position.create(lineNumber, regexResult[0].length))
-	let symbol: ls.SymbolInformation = ls.SymbolInformation.create(openClassName, ls.SymbolKind.Class, range, uri);
+	let symbol: VBSClassSymbol = new VBSClassSymbol();
+	symbol.name = openClassName;
+	symbol.nameLocation = ls.Location.create(uri, 
+		ls.Range.create(openClassStart, 
+			ls.Position.create(openClassStart.line, openClassStart.character + openClassName.length)
+		)
+	);
+	symbol.symbolRange = range;
+	//let symbol: ls.SymbolInformation = ls.SymbolInformation.create(openClassName, ls.SymbolKind.Class, range, uri);
 
 	openClassName = null;
 	openClassStart = ls.Position.create(-1, -1);
 
 	return symbol;
 }
-
-/*
-connection.onDidOpenTextDocument((params) => {
-	// A text document got opened in VSCode.
-	// params.textDocument.uri uniquely identifies the document. For documents store on disk this is a file URI.
-	// params.textDocument.text the initial full content of the document.
-	connection.console.log(`${params.textDocument.uri} opened.`);
-});
-
-connection.onDidChangeTextDocument((params) => {
-	// The content of a text document did change in VSCode.
-	// params.textDocument.uri uniquely identifies the document.
-	// params.contentChanges describe the content changes to the document.
-	connection.console.log(`${params.textDocument.uri} changed: ${JSON.stringify(params.contentChanges)}`);
-});
-
-connection.onDidCloseTextDocument((params) => {
-	// A text document got closed in VSCode.
-	// params.textDocument.uri uniquely identifies the document.
-	connection.console.log(`${params.textDocument.uri} closed.`);
-});
-*/
 
 // Listen on the connection
 connection.listen();
