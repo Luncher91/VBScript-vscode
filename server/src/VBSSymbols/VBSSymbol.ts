@@ -14,9 +14,17 @@ export class VBSSymbol {
 		return this.name;
 	}
 
-	public GetLsKind(): ls.SymbolKind {
+	public GetLsSymbolKind(): ls.SymbolKind {
 		// I do not know any better value to return here - I liked to have something like ls.SymbolKind.UNKNOWN
 		return ls.SymbolKind.File;
+	}
+
+	public GetLsCompletionItem(): ls.CompletionItem {
+		let item = ls.CompletionItem.create(this.name);
+		item.filterText = this.name;
+		item.insertText = this.name;
+		item.kind = ls.CompletionItemKind.Text;
+		return item;
 	}
 	
 	public static GetLanguageServerSymbols(symbols: VBSSymbol[]): ls.SymbolInformation[] {
@@ -25,7 +33,7 @@ export class VBSSymbol {
 		symbols.forEach(symbol => {
 			let lsSymbol: ls.SymbolInformation = ls.SymbolInformation.create(
 				symbol.GetLsName(),
-				symbol.GetLsKind(),
+				symbol.GetLsSymbolKind(),
 				symbol.symbolRange,
 				symbol.nameLocation.uri,
 				symbol.parentName
@@ -34,5 +42,16 @@ export class VBSSymbol {
 		});
 
 		return lsSymbols;
+	}
+
+	public static GetLanguageServerCompletionItems(symbols: VBSSymbol[]): ls.CompletionItem[] {
+		let completionItems: ls.CompletionItem[] = [];
+
+		symbols.forEach(symbol => {
+			let lsItem = symbol.GetLsCompletionItem();
+			completionItems.push(lsItem);
+		});
+
+		return completionItems;
 	}
 }
