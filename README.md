@@ -4,7 +4,7 @@ This extension provides symbols for VBScript.
 
 Pressing <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd> lists all symbols of the current file.
 
-You also can display symbols by using extensions like "Code Outline" by Patryk Zawadzki.
+You can display symbols by using extensions like "Code Outline" by Patryk Zawadzki as well.
 
 ## Supported Symbols
 
@@ -14,12 +14,11 @@ You also can display symbols by using extensions like "Code Outline" by Patryk Z
 - __Property__
 - __Field__
 - global and class wide __Const__
-- global __Dim__
+- __Dim__
 
 ## Known issues
 
 - A multiline (seperated by an underscore _ ) definition will not be recognized.
-
 
 ## Fixed issues
 
