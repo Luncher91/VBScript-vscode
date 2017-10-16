@@ -15,13 +15,29 @@ export class VBSPropertySymbol extends VBSSymbol {
 
 	public GetLsCompletionItem(): ls.CompletionItem {
 		let item = ls.CompletionItem.create(this.name);
-		if(this.args != null)
-			item.documentation = this.visibility + " " + this.type.trim() + " " + this.name + "(" + this.args + ")"
-		else
-			item.documentation = this.visibility + " " + this.type.trim() + " " + this.name
+		
+		item.documentation = this.GetDocu();
 		item.filterText = this.name;
 		item.insertText = this.name;
 		item.kind = ls.CompletionItemKind.Property;
 		return item;
+	}
+
+	private GetDocu(): string {
+		let docu = "";
+		
+		if(this.visibility != null)
+			docu += this.visibility.trim();
+
+		if(this.type != null)
+			docu += this.type.trim();
+
+		if(this.name != null)
+			docu += this.name.trim();
+
+		if(this.args != null)
+			docu += "(" + this.args + ")";
+
+		return docu.trim();
 	}
 }

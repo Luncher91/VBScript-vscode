@@ -84,12 +84,11 @@ function SelectCompletionItems(textDocumentPosition: ls.TextDocumentPositionPara
 		symbols = symbolCache[textDocumentPosition.textDocument.uri];
 	}
 
-	let ci: ls.CompletionItem = ls.CompletionItem.create("hello world!");
 	let scopeSymbols = GetSymbolsOfScope(symbols, textDocumentPosition.position);
 	return VBSSymbol.GetLanguageServerCompletionItems(scopeSymbols);
 }
 
-function GetSymbolsOfScope(symbols: VBSSymbol[], position: ls.Position): VBSSymbol[] {
+function GetVBSSymbolTree(symbols: VBSSymbol[]) {
 	// sort by start positition
 	let sortedSymbols: VBSSymbol[] = symbols.sort(function(a: VBSSymbol, b: VBSSymbol){
 		let diff = a.symbolRange.start.line - b.symbolRange.start.line;
@@ -100,17 +99,96 @@ function GetSymbolsOfScope(symbols: VBSSymbol[], position: ls.Position): VBSSymb
 		return a.symbolRange.start.character - b.symbolRange.start.character;
 	});
 
+	let root = new VBSSymbolTree();
+	
+	for (var i = 0; i < sortedSymbols.length; i++) {
+		var symbol = sortedSymbols[i];
+		root.InsertIntoTree(symbol);
+	}
+
+	return root;
+}
+
+function GetSymbolsOfScope(symbols: VBSSymbol[], position: ls.Position): VBSSymbol[] {
+	let symbolTree = GetVBSSymbolTree(symbols);
 	// bacause of hoisting we will have just a few possible scopes:
 	// - file wide
 	// - method of file wide
 	// - class scope
 	// - method or property of class scope
-	
-	// find out in which scope we are
-	// get all symbols which are accessable from there (ignore visibility in the first step)
+	// get all symbols which are accessable from here (ignore visibility in the first step)
 
-	// very first shot: ignore the scopes completly!
-	return sortedSymbols;
+	return symbolTree.FindDirectParent(position).GetAllParentsAndTheirDirectChildren();
+}
+
+class VBSSymbolTree {
+	parent: VBSSymbolTree = null;
+	children: VBSSymbolTree[] = [];
+	data: VBSSymbol = null;
+
+	public InsertIntoTree(symbol: VBSSymbol): boolean {
+		if(this.data != null && !PositionInRange(this.data.symbolRange, symbol.symbolRange.start))
+			return false;
+
+		for (var i = 0; i < this.children.length; i++) {
+			var symbolTree = this.children[i];
+			if(symbolTree.InsertIntoTree(symbol))
+				return true;
+		}
+
+		let newTreeNode = new VBSSymbolTree();
+		newTreeNode.data = symbol;
+		newTreeNode.parent = this;
+
+		this.children.push(newTreeNode);
+
+		return true;
+	}
+
+	public FindDirectParent(position: ls.Position): VBSSymbolTree {
+		if(this.data != null && !PositionInRange(this.data.symbolRange, position))
+			return null;
+		
+		for (var i = 0; i < this.children.length; i++) {
+			let symbolTree = this.children[i];
+			let found = symbolTree.FindDirectParent(position);
+			if(found != null)
+				return found;
+		}
+
+		return this;
+	}
+
+	public GetAllParentsAndTheirDirectChildren(): VBSSymbol[] {
+		let symbols: VBSSymbol[];
+
+		if(this.parent != null)
+			symbols = this.parent.GetAllParentsAndTheirDirectChildren();
+		else
+			symbols = [];
+		
+		let childSymbols = this.children.map(function(symbolTree) {
+			return symbolTree.data;
+		});
+
+		return symbols.concat(childSymbols);
+	}
+}
+
+function PositionInRange(range: ls.Range, position: ls.Position): boolean {
+	if(range.start.line > position.line)
+		return false;
+
+	if(range.end.line < position.line)
+		return false;
+
+	if(range.start.line == position.line && range.start.character >= position.character)
+		return false;
+		
+	if(range.end.line == position.line && range.end.character <= position.character)
+		return false;
+
+	return true;
 }
 
 let symbolCache: { [id: string] : VBSSymbol[]; } = {};
