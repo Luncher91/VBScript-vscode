@@ -78,6 +78,12 @@ function GetSymbolsOfDocument(uri: string) : ls.SymbolInformation[] {
 
 function SelectCompletionItems(textDocumentPosition: ls.TextDocumentPositionParams): ls.CompletionItem[] {
 	let symbols = symbolCache[textDocumentPosition.textDocument.uri];
+
+	if(symbols == null) {
+		RefreshDocumentsSymbols(textDocumentPosition.textDocument.uri);
+		symbols = symbolCache[textDocumentPosition.textDocument.uri];
+	}
+
 	let ci: ls.CompletionItem = ls.CompletionItem.create("hello world!");
 	let scopeSymbols = GetSymbolsOfScope(symbols, textDocumentPosition.position);
 	return VBSSymbol.GetLanguageServerCompletionItems(scopeSymbols);
