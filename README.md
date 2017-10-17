@@ -23,7 +23,8 @@ You can display symbols by using extensions like "Code Outline" by Patryk Zawadz
 
 ## Fixed issues
 
-- Indentation using tab does now work as well
+- Indentation using tab
+- Dim with multiple definitions recognition
 
 ---
 

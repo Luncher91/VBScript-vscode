@@ -216,10 +216,14 @@ function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 		let statements = SplitStatements(line);
 
 		statements.forEach(statement => {
-			let newSym = FindSymbol(statement, i, document.uri);
-			if(newSym != null)
-			{
-				symbols.push(newSym);
+			let newSymbols = FindSymbol(statement, i, document.uri);
+
+			for (var j = 0; j < newSymbols.length; j++) {
+				var newSym = newSymbols[j];
+				
+				if(newSym != null) {
+					symbols.push(newSym);
+				}
 			}
 		});
 	}
@@ -246,41 +250,43 @@ function ReplaceBySpaces(match: string) : string {
 	return " ".repeat(match.length);
 }
 
-function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol {
+function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol[] {
 	let newSym: VBSSymbol;
 
 	if(GetMethodStart(statement, lineNumber, uri))
-		return null;
+		return [];
 
 	newSym = GetMethodSymbol(statement, lineNumber, uri);
 	if(newSym != null)
-		return newSym;
+		return [newSym];
 
 	if(GetPropertyStart(statement, lineNumber, uri))
-		return null;
+		return [];
 
 	newSym = GetPropertySymbol(statement, lineNumber, uri);;
 	if(newSym != null)
-		return newSym;
+		return [newSym];
 
 	if(GetClassStart(statement, lineNumber, uri))
-		return null;
+		return [];
 
 	newSym = GetClassSymbol(statement, lineNumber, uri);
 	if(newSym != null)
-		return newSym;
+		return [newSym];
 
 	newSym = GetMemberSymbol(statement, lineNumber, uri);
 	if(newSym != null)
-		return newSym;
+		return [newSym];
 
-	newSym = GetVariableSymbol(statement, lineNumber, uri);
-	if(newSym != null)
-		return newSym;
+	let newSyms: VBSVariableSymbol[] = GetVariableSymbol(statement, lineNumber, uri);
+	if(newSyms != null && newSyms.length != 0)
+		return newSyms;
 
 	newSym = GetConstantSymbol(statement, lineNumber, uri);
 	if(newSym != null)
-		return newSym;
+		return [newSym];
+
+	return [];
 }
 
 let openClassName : string = null;
@@ -472,8 +478,13 @@ function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMem
 	return symbol;
 }
 
-function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSVariableSymbol {
-	let memberStartRegex:RegExp = /^[ \t]*(dim[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
+function GetVariableNamesFromList(vars: string): string[] {
+	return vars.split(',').map(function(s) { return s.trim(); });
+}
+
+function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSVariableSymbol[] {
+	let variableSymbols: VBSVariableSymbol[] = [];
+	let memberStartRegex:RegExp = /^[ \t]*(dim[ \t]+)(([a-zA-Z0-9\-\_]+[ \t]*\,[ \t]*)*)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 3)
@@ -481,11 +492,10 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSV
 
 	// (dim[ \t]+)
 	let visibility = regexResult[1];
-	let name = regexResult[2];
+	let variables = GetVariableNamesFromList(regexResult[2] + regexResult[4]);
 	let intendention = GetNumberOfFrontSpaces(line);
 	let nameStartIndex = line.indexOf(line);
-
-	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let firstElementOffset = visibility.length;
 	let parentName: string = "";
 
 	if(openClassName != null)
@@ -497,21 +507,39 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSV
 	if(openProperty != null)
 		parentName = openProperty.name;
 
-	let symbol: VBSVariableSymbol = new VBSVariableSymbol();
-	symbol.visibility = "";
-	symbol.type = "";
-	symbol.name = name;
-	symbol.args = "";
-	symbol.symbolRange = range;
-	symbol.nameLocation = ls.Location.create(uri, 
-		ls.Range.create(
-			ls.Position.create(lineNumber, nameStartIndex),
-			ls.Position.create(lineNumber, nameStartIndex + name.length)
-		)
-	);
-	symbol.parentName = parentName;
+	for (let i = 0; i < variables.length; i++) {
+		let varName = variables[i];
+		let symbol: VBSVariableSymbol = new VBSVariableSymbol();
+		symbol.visibility = "";
+		symbol.type = "";
+		symbol.name = varName;
+		symbol.args = "";
+		symbol.nameLocation = ls.Location.create(uri, 
+			GetNameRange(lineNumber, line, varName )
+		);
+		symbol.symbolRange = ls.Range.create(
+			ls.Position.create(lineNumber, symbol.nameLocation.range.start.character - firstElementOffset), 
+			ls.Position.create(lineNumber, symbol.nameLocation.range.end.character)
+		);
+		firstElementOffset = 0;
+		symbol.parentName = parentName;
+		
+		variableSymbols.push(symbol);
+	}
 
-	return symbol;
+	return variableSymbols;
+}
+
+function GetNameRange(lineNumber: number, line: string, name: string): ls.Range {
+	let findVariableName = new RegExp("(" + name.trim() + "[ \t]*)(\,|$)","gi");
+	let matches = findVariableName.exec(line);
+
+	let rng = ls.Range.create(
+		ls.Position.create(lineNumber, matches.index),
+		ls.Position.create(lineNumber, matches.index + name.trim().length)
+	)
+
+	return rng;
 }
 
 function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSConstantSymbol {
