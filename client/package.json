@@ -28,6 +28,16 @@
   ],
   "main": "./out/src/extension",
   "contributes": {
+	  "languages": [
+		  {
+			  "id": "vbs",
+			  "aliases": [
+				  "VBScript",
+				  "vbscript",
+				  "VBS"
+			  ]
+		  }
+	  ],
     "configuration": {
       "type": "object",
       "title": "VBScript language configuration",
