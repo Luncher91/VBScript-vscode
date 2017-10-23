@@ -193,9 +193,11 @@ function PositionInRange(range: ls.Range, position: ls.Position): boolean {
 
 let symbolCache: { [id: string] : VBSSymbol[]; } = {};
 function RefreshDocumentsSymbols(uri: string) {
+	connection.console.log("Start refreshing symbols...");
 	let symbolsList: VBSSymbol[] = [];
 	CollectSymbols(documents.get(uri), symbolsList);
 	symbolCache[uri] = symbolsList;
+	connection.console.log("Symbols refreshed!");
 }
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
@@ -252,13 +254,14 @@ function ReplaceBySpaces(match: string) : string {
 
 function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol[] {
 	let newSym: VBSSymbol;
+	let newSyms: VBSVariableSymbol[] = null;
 
 	if(GetMethodStart(statement, lineNumber, uri))
 		return [];
 
-	newSym = GetMethodSymbol(statement, lineNumber, uri);
-	if(newSym != null)
-		return [newSym];
+	newSyms = GetMethodSymbol(statement, lineNumber, uri);
+	if(newSyms != null && newSyms.length != 0)
+		return newSyms;
 
 	if(GetPropertyStart(statement, lineNumber, uri))
 		return [];
@@ -278,7 +281,7 @@ function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSym
 	if(newSym != null)
 		return [newSym];
 
-	let newSyms: VBSVariableSymbol[] = GetVariableSymbol(statement, lineNumber, uri);
+	newSyms = GetVariableSymbol(statement, lineNumber, uri);
 	if(newSyms != null && newSyms.length != 0)
 		return newSyms;
 
@@ -296,6 +299,7 @@ class OpenMethod {
 	visibility: string;
 	type: string;
 	name: string;
+	argsIndex: number;
 	args: string;
 	startPosition: ls.Position;
 	nameLocation: ls.Location;
@@ -304,19 +308,29 @@ class OpenMethod {
 let openMethod: OpenMethod = null;
 
 function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
-	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
+	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)([ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = rex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
 		return;
 
 	if(openMethod == null) {
+		let leadingSpaces = GetNumberOfFrontSpaces(line);
+		let preLength = leadingSpaces + regexResult.index;
+
+		for (var i = 1; i < 6; i++) {
+			var resElement = regexResult[i];
+			if(resElement != null)
+				preLength += resElement.length;
+		}
+
 		openMethod = {
 			visibility: regexResult[1],
 			type: regexResult[2],
 			name: regexResult[3],
-			args: regexResult[5],
-			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
+			argsIndex: preLength + 1, // opening bracket
+			args: regexResult[7],
+			startPosition: ls.Position.create(lineNumber, leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
@@ -324,12 +338,13 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
+		console.log("ERROR - line " + lineNumber + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
 }
 
-function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSMethodSymbol{
+function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSSymbol[] {
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+(function|sub)[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(line);
@@ -341,12 +356,14 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSMet
 
 	if(openMethod == null) {
 		// ERROR!!! I cannot close any method!
+		console.log("ERROR - line " + lineNumber + ": There is no " + type + " to end!");
 		return null;
 	}
 
 	if(type != openMethod.type) {
 		// ERROR!!! I expected end function|sub and not sub|function!
 		// show the user the error and then go on like it was the right type!
+		console.log("ERROR - line " + lineNumber + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	let range: ls.Range = ls.Range.create(openMethod.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
@@ -360,9 +377,41 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSMet
 	symbol.parentName = openClassName;
 	symbol.symbolRange = range;
 
+	let parametersSymbol = GetParameterSymbols(openMethod.args, openMethod.argsIndex, range.start.line, uri);
+
 	openMethod = null;
 
-	return symbol;
+	//return [symbol];
+	return parametersSymbol.concat(symbol);
+}
+
+function GetParameterSymbols(args: string, argsIndex: number, lineNumber: number, uri: string): VBSVariableSymbol[] {
+	let symbols: VBSVariableSymbol[] = [];
+
+	if(args == null)
+		return symbols;
+
+	let argsSplitted: string[] = args.split(',');
+
+	for (let i = 0; i < argsSplitted.length; i++) {
+		let arg = argsSplitted[i];
+		let varSymbol:VBSVariableSymbol = new VBSVariableSymbol();
+		varSymbol.args = "";
+		varSymbol.type = "";
+		varSymbol.visibility = "";
+		varSymbol.name = arg.trim();
+		let range = ls.Range.create(
+			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name)),
+			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name) + varSymbol.name.length)
+		);
+		varSymbol.nameLocation = ls.Location.create(uri, range);
+		varSymbol.symbolRange = range;
+
+		symbols.push(varSymbol);
+		argsIndex += arg.length + 1; // comma
+	}
+
+	return symbols;
 }
 
 function GetNumberOfFrontSpaces(line: string): number {
@@ -412,6 +461,7 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
+		console.log("ERROR - line " + lineNumber + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
@@ -426,7 +476,8 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 		return null;
 
 	if(openProperty == null) {
-		// ERROR!!! I cannot close any method!
+		// ERROR!!! I cannot close any property!
+		console.log("ERROR - line " + lineNumber + ": There is no property to end!");
 		return null;
 	}
 
@@ -606,21 +657,24 @@ function GetClassStart(line: string, lineNumber: number, uri: string) : boolean 
 
 function GetClassSymbol(line: string, lineNumber: number, uri: string) : VBSClassSymbol {
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+class[ \t]*$/gi;
+
 	if(openClassName == null)
 		return null;
-
-	if(openMethod != null) {
-		// ERROR! expected to close method before!
-	}
-
-	if(openProperty != null) {
-		// ERROR! expected to close property before!
-	}
-
+	
 	let regexResult = classEndRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 1)
 		return null;
+
+	if(openMethod != null) {
+		// ERROR! expected to close method before!
+		console.log("ERROR - line " + lineNumber + ": 'end " + openMethod.type + "' expected!");
+	}
+
+	if(openProperty != null) {
+		// ERROR! expected to close property before!
+		console.log("ERROR - line " + lineNumber + ": 'end property' expected!");
+	}
 
 	let range: ls.Range = ls.Range.create(openClassStart, ls.Position.create(lineNumber, regexResult[0].length))
 	let symbol: VBSClassSymbol = new VBSClassSymbol();
