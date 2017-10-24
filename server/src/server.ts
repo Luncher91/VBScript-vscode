@@ -193,11 +193,9 @@ function PositionInRange(range: ls.Range, position: ls.Position): boolean {
 
 let symbolCache: { [id: string] : VBSSymbol[]; } = {};
 function RefreshDocumentsSymbols(uri: string) {
-	connection.console.log("Start refreshing symbols...");
 	let symbolsList: VBSSymbol[] = [];
 	CollectSymbols(documents.get(uri), symbolsList);
 	symbolCache[uri] = symbolsList;
-	connection.console.log("Symbols refreshed!");
 }
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
@@ -232,10 +230,6 @@ function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 
 		statements.forEach(statement => {
 			let newSymbols = FindSymbol(statement, document.uri);
-			
-			console.log("statement: " + JSON.stringify(statement));
-			console.log("symbols: " + JSON.stringify(newSymbols));
-			console.log("=============================================================");
 
 			for (var j = 0; j < newSymbols.length; j++) {
 				var newSym = newSymbols[j];
@@ -630,9 +624,6 @@ function GetPropertySymbol(statement: MultiLineStatement, uri: string) : VBSSymb
 		openProperty.startPosition, 
 		statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line) + regexResult[0].trim().length)
 	);
-
-	console.log("end property stmnt: " + JSON.stringify(statement));
-	console.log("end property regex: " + JSON.stringify(regexResult));
 	
 	let symbol = new VBSPropertySymbol();
 	symbol.visibility = "";
@@ -753,11 +744,6 @@ function GetNameRange(statement: MultiLineStatement, name: string): ls.Range {
 		statement.GetPostitionByCharacter(matches.index),
 		statement.GetPostitionByCharacter(matches.index + name.trim().length)
 	);
-
-	console.log("in line: " + JSON.stringify(line));
-	console.log("matches: " + JSON.stringify(matches) + " at " + matches.index);
-	console.log("name: " + name);
-	console.log(JSON.stringify(rng));
 
 	return rng;
 }
