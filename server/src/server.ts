@@ -266,9 +266,9 @@ function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSym
 	if(GetPropertyStart(statement, lineNumber, uri))
 		return [];
 
-	newSym = GetPropertySymbol(statement, lineNumber, uri);;
-	if(newSym != null)
-		return [newSym];
+	newSyms = GetPropertySymbol(statement, lineNumber, uri);;
+	if(newSyms != null && newSyms.length != 0)
+		return newSyms;
 
 	if(GetClassStart(statement, lineNumber, uri))
 		return [];
@@ -327,7 +327,7 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 		openMethod = {
 			visibility: regexResult[1],
 			type: regexResult[2],
-			name: regexResult[3],
+			name: regexResult[4],
 			argsIndex: preLength + 1, // opening bracket
 			args: regexResult[7],
 			startPosition: ls.Position.create(lineNumber, leadingSpaces),
@@ -335,6 +335,10 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
 				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
 		};
+		
+		if(openMethod.args == null)
+			openMethod.args = "";
+
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
@@ -385,21 +389,37 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSSym
 	return parametersSymbol.concat(symbol);
 }
 
+function ReplaceAll(target: string, search: string, replacement: string): string {
+    return target.replace(new RegExp(search, 'g'), replacement);
+};
+
 function GetParameterSymbols(args: string, argsIndex: number, lineNumber: number, uri: string): VBSVariableSymbol[] {
 	let symbols: VBSVariableSymbol[] = [];
 
-	if(args == null)
+	if(args == null || args == "")
 		return symbols;
 
 	let argsSplitted: string[] = args.split(',');
 
 	for (let i = 0; i < argsSplitted.length; i++) {
 		let arg = argsSplitted[i];
+		
+		let splittedByValByRefName = ReplaceAll(ReplaceAll(arg, "\t", " "), "  ", " ").trim().split(" ");
+
 		let varSymbol:VBSVariableSymbol = new VBSVariableSymbol();
 		varSymbol.args = "";
 		varSymbol.type = "";
 		varSymbol.visibility = "";
-		varSymbol.name = arg.trim();
+
+		if(splittedByValByRefName.length == 1)
+			varSymbol.name = splittedByValByRefName[0].trim();
+		else if(splittedByValByRefName.length > 1)
+		{
+			// ByVal or ByRef
+			varSymbol.type = splittedByValByRefName[0].trim();
+			varSymbol.name = splittedByValByRefName[1].trim();
+		}
+
 		let range = ls.Range.create(
 			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name)),
 			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name) + varSymbol.name.length)
@@ -432,6 +452,7 @@ class OpenProperty {
 	visibility: string;
 	type: string;
 	name: string;
+	argsIndex: number;
 	args: string;
 	startPosition: ls.Position;
 	nameLocation: ls.Location;
@@ -440,23 +461,36 @@ class OpenProperty {
 let openProperty: OpenProperty = null;
 
 function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
-	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?property[ \t]+(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
+	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
 		return null;
 
+	let leadingSpaces = GetNumberOfFrontSpaces(line);
+	let preLength = leadingSpaces + regexResult.index;
+	
+	for (var i = 1; i < 6; i++) {
+		var resElement = regexResult[i];
+		if(resElement != null)
+			preLength += resElement.length;
+	}
+
 	if(openProperty == null) {
 		openProperty = {
 			visibility: regexResult[1],
-			type: regexResult[2],
-			name: regexResult[3],
-			args: regexResult[5],
-			startPosition: ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line)),
+			type: regexResult[3],
+			name: regexResult[4],
+			argsIndex: preLength + 1,
+			args: regexResult[7],
+			startPosition: ls.Position.create(lineNumber, leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
+				ls.Position.create(lineNumber, line.indexOf(regexResult[4])),
+				ls.Position.create(lineNumber, line.indexOf(regexResult[4]) + regexResult[4].length)))
 		};
+
+		if(openProperty.args == null)
+			openProperty.args = "";
 
 		return true;
 	} else {
@@ -467,7 +501,7 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 	return false;
 }
 
-function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : VBSPropertySymbol{
+function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol[] {
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+property[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(statement);
@@ -485,6 +519,7 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 	let range: ls.Range = ls.Range.create(openProperty.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(statement) + regexResult[0].trim().length))
 	
 	let symbol = new VBSPropertySymbol()
+	symbol.visibility = "";
 	symbol.type = openProperty.type;
 	symbol.name = openProperty.name;
 	symbol.args = openProperty.args;
@@ -493,9 +528,11 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 	symbol.parentName = openClassName;
 	symbol.symbolRange = range;
 
+	let parametersSymbol = GetParameterSymbols(openProperty.args, openProperty.argsIndex, range.start.line, uri);
+
 	openProperty = null;
 
-	return symbol;
+	return parametersSymbol.concat(symbol);
 }
 
 function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMemberSymbol {
