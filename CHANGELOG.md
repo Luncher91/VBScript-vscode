@@ -4,6 +4,7 @@
 
 - fixed issue: Parameters as symbols
 - added language contribution
+- fixed issue: Underline seperation
 
 # Version 0.0.6
 

@@ -19,13 +19,12 @@ You can display symbols by using extensions like "Code Outline" by Patryk Zawadz
 
 ## Known issues
 
-- A multiline (seperated by an underscore _ ) definition will not be recognized.
-
 ## Fixed issues
 
 - Indentation using tab
 - Dim with multiple definitions recognition
 - parameters are not recognized as symbols
+- A multiline (seperated by an underscore _ ) definition will not be recognized.
 
 ---
 

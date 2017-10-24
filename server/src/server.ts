@@ -207,18 +207,35 @@ connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInfor
 function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 	let lines = document.getText().split(/\r?\n/g);
 
+	let startMultiLine: number = -1;
+	let multiLines: string[] = [];
+
 	for (var i = 0; i < lines.length; i++) {
 		let line = lines[i];
-
+		
 		let containsComment = line.indexOf("'");
 		if(containsComment > -1)
 			line = line.substring(0, containsComment);
 
-		line = ReplaceStringLiterals(line);
-		let statements = SplitStatements(line);
+		if(startMultiLine == -1)
+			startMultiLine = i;
+
+		if(line.trim().endsWith("_")) {
+			multiLines.push(line.slice(0, -1));
+			continue;
+		} else {
+			multiLines.push(line);
+		}
+
+		multiLines = ReplaceStringLiterals(multiLines);
+		let statements = SplitStatements(multiLines, startMultiLine);
 
 		statements.forEach(statement => {
-			let newSymbols = FindSymbol(statement, i, document.uri);
+			let newSymbols = FindSymbol(statement, document.uri);
+			
+			console.log("statement: " + JSON.stringify(statement));
+			console.log("symbols: " + JSON.stringify(newSymbols));
+			console.log("=============================================================");
 
 			for (var j = 0; j < newSymbols.length; j++) {
 				var newSym = newSymbols[j];
@@ -228,64 +245,143 @@ function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 				}
 			}
 		});
+
+		startMultiLine =-1;
+		multiLines = [];
 	}
 }
 
-function SplitStatements(line: string) {
-	let statements: string[] = line.split(":");
-	let offset = 0;
+class MultiLineStatement {
+	startCharacter: number = 0;
+	startLine: number = -1;
+	lines: string[] = [];
 
-	for (var i = 0; i < statements.length; i++) {
-		statements[i] = " ".repeat(offset) + statements[i];
-		offset = statements[i].length + 1;
+	public GetFullStatement(): string {
+		return " ".repeat(this.startCharacter) + this.lines.join("");
+	}
+
+	public GetPostitionByCharacter(charIndex: number) : ls.Position {
+		let internalIndex = charIndex - this.startCharacter;
+
+		for (let i = 0; i < this.lines.length; i++) {
+			let line = this.lines[i];
+			
+			if(internalIndex <= line.length) {
+				if(i == 0)
+					return ls.Position.create(this.startLine + i, internalIndex + this.startCharacter);
+				else
+					return ls.Position.create(this.startLine + i, internalIndex);
+
+			}
+
+			internalIndex = internalIndex - line.length;
+
+			if(internalIndex < 0)
+				break;
+		}
+
+		console.log("WARNING: cannot resolve " + charIndex + " in me: " + JSON.stringify(this));
+		return null;
+	}
+}
+
+function SplitStatements(lines: string[], startLineIndex: number): MultiLineStatement[] {
+	let statement: MultiLineStatement = new MultiLineStatement();
+	let statements: MultiLineStatement[] = [];
+	let charOffset: number = 0;
+
+	for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		charOffset = 0;
+		let sts: string[] = line.split(":");
+		
+		if(sts.length == 1) {
+			statement.lines.push(sts[0]);
+			if(statement.startLine == -1) {
+				statement.startLine = startLineIndex + i;
+			}
+		} else {
+			for (var j = 0; j < sts.length; j++) {
+				var st = sts[j];
+				
+				if(statement.startLine == -1)
+					statement.startLine = startLineIndex + i;
+				
+				statement.lines.push(st);
+				
+				if(j == sts.length-1) {
+					//charOffset += st.length;
+					break;
+				}
+				
+				statement.startCharacter = charOffset;
+				statements.push(statement);
+				statement = new MultiLineStatement();
+
+				charOffset += st.length 
+					+ 1; // ":"
+			}
+		}
+	}
+
+	if(statement.startLine != -1) {
+		statement.startCharacter = charOffset;
+		statements.push(statement);
 	}
 
 	return statements;
 }
 
-function ReplaceStringLiterals(line:string) : string {
-	let stringLiterals = /\"(([^\"]|\"\")*)\"/gi;
-	return line.replace(stringLiterals, ReplaceBySpaces);
+function ReplaceStringLiterals(lines:string[]) : string[] {
+	let newLines: string[] = [];
+
+	for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		let stringLiterals = /\"(([^\"]|\"\")*)\"/gi;
+		newLines.push(line.replace(stringLiterals, ReplaceBySpaces));
+	}
+
+	return newLines;
 }
 
 function ReplaceBySpaces(match: string) : string {
 	return " ".repeat(match.length);
 }
 
-function FindSymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol[] {
+function FindSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol[] {
 	let newSym: VBSSymbol;
 	let newSyms: VBSVariableSymbol[] = null;
 
-	if(GetMethodStart(statement, lineNumber, uri))
+	if(GetMethodStart(statement, uri))
 		return [];
 
-	newSyms = GetMethodSymbol(statement, lineNumber, uri);
+	newSyms = GetMethodSymbol(statement, uri);
 	if(newSyms != null && newSyms.length != 0)
 		return newSyms;
 
-	if(GetPropertyStart(statement, lineNumber, uri))
+	if(GetPropertyStart(statement, uri))
 		return [];
 
-	newSyms = GetPropertySymbol(statement, lineNumber, uri);;
+	newSyms = GetPropertySymbol(statement, uri);;
 	if(newSyms != null && newSyms.length != 0)
 		return newSyms;
 
-	if(GetClassStart(statement, lineNumber, uri))
+	if(GetClassStart(statement, uri))
 		return [];
 
-	newSym = GetClassSymbol(statement, lineNumber, uri);
+	newSym = GetClassSymbol(statement, uri);
 	if(newSym != null)
 		return [newSym];
 
-	newSym = GetMemberSymbol(statement, lineNumber, uri);
+	newSym = GetMemberSymbol(statement, uri);
 	if(newSym != null)
 		return [newSym];
 
-	newSyms = GetVariableSymbol(statement, lineNumber, uri);
+	newSyms = GetVariableSymbol(statement, uri);
 	if(newSyms != null && newSyms.length != 0)
 		return newSyms;
 
-	newSym = GetConstantSymbol(statement, lineNumber, uri);
+	newSym = GetConstantSymbol(statement, uri);
 	if(newSym != null)
 		return [newSym];
 
@@ -303,11 +399,14 @@ class OpenMethod {
 	args: string;
 	startPosition: ls.Position;
 	nameLocation: ls.Location;
+	statement: MultiLineStatement;
 }
 
 let openMethod: OpenMethod = null;
 
-function GetMethodStart(line: string, lineNumber: number, uri: string): boolean {
+function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
+	let line = statement.GetFullStatement();
+
 	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)([ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = rex.exec(line);
 
@@ -330,10 +429,12 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 			name: regexResult[4],
 			argsIndex: preLength + 1, // opening bracket
 			args: regexResult[7],
-			startPosition: ls.Position.create(lineNumber, leadingSpaces),
+			startPosition: statement.GetPostitionByCharacter(leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3])),
-				ls.Position.create(lineNumber, line.indexOf(regexResult[3]) + regexResult[3].length)))
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[3])),
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[3]) + regexResult[3].length))
+			),
+			statement: statement
 		};
 		
 		if(openMethod.args == null)
@@ -342,13 +443,15 @@ function GetMethodStart(line: string, lineNumber: number, uri: string): boolean 
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.log("ERROR - line " + lineNumber + ": 'end function' or 'end sub' expected!");
+		console.log("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
 }
 
-function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSSymbol[] {
+function GetMethodSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol[] {
+	let line: string = statement.GetFullStatement();
+
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+(function|sub)[ \t]*$/gi;
 
 	let regexResult = classEndRegex.exec(line);
@@ -360,17 +463,17 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSSym
 
 	if(openMethod == null) {
 		// ERROR!!! I cannot close any method!
-		console.log("ERROR - line " + lineNumber + ": There is no " + type + " to end!");
+		console.log("ERROR - line " + statement.startLine + ": There is no " + type + " to end!");
 		return null;
 	}
 
 	if(type != openMethod.type) {
 		// ERROR!!! I expected end function|sub and not sub|function!
 		// show the user the error and then go on like it was the right type!
-		console.log("ERROR - line " + lineNumber + ": 'end " + openMethod.type + "' expected!");
+		console.log("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
 	}
 
-	let range: ls.Range = ls.Range.create(openMethod.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
+	let range: ls.Range = ls.Range.create(openMethod.startPosition, statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
 	
 	let symbol: VBSMethodSymbol = new VBSMethodSymbol();
 	symbol.visibility = openMethod.visibility;
@@ -381,7 +484,7 @@ function GetMethodSymbol(line: string, lineNumber: number, uri: string) : VBSSym
 	symbol.parentName = openClassName;
 	symbol.symbolRange = range;
 
-	let parametersSymbol = GetParameterSymbols(openMethod.args, openMethod.argsIndex, range.start.line, uri);
+	let parametersSymbol = GetParameterSymbols(openMethod.args, openMethod.argsIndex, openMethod.statement, uri);
 
 	openMethod = null;
 
@@ -393,7 +496,7 @@ function ReplaceAll(target: string, search: string, replacement: string): string
     return target.replace(new RegExp(search, 'g'), replacement);
 };
 
-function GetParameterSymbols(args: string, argsIndex: number, lineNumber: number, uri: string): VBSVariableSymbol[] {
+function GetParameterSymbols(args: string, argsIndex: number, statement: MultiLineStatement, uri: string): VBSVariableSymbol[] {
 	let symbols: VBSVariableSymbol[] = [];
 
 	if(args == null || args == "")
@@ -421,8 +524,8 @@ function GetParameterSymbols(args: string, argsIndex: number, lineNumber: number
 		}
 
 		let range = ls.Range.create(
-			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name)),
-			ls.Position.create(lineNumber, argsIndex + arg.indexOf(varSymbol.name) + varSymbol.name.length)
+			statement.GetPostitionByCharacter(argsIndex + arg.indexOf(varSymbol.name)),
+			statement.GetPostitionByCharacter(argsIndex + arg.indexOf(varSymbol.name) + varSymbol.name.length)
 		);
 		varSymbol.nameLocation = ls.Location.create(uri, range);
 		varSymbol.symbolRange = range;
@@ -456,11 +559,14 @@ class OpenProperty {
 	args: string;
 	startPosition: ls.Position;
 	nameLocation: ls.Location;
+	statement: MultiLineStatement;
 }
 
 let openProperty: OpenProperty = null;
 
-function GetPropertyStart(line: string, lineNumber: number, uri: string) : boolean {
+function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean {
+	let line: string = statement.GetFullStatement();
+
 	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 
@@ -483,10 +589,12 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 			name: regexResult[4],
 			argsIndex: preLength + 1,
 			args: regexResult[7],
-			startPosition: ls.Position.create(lineNumber, leadingSpaces),
+			startPosition: statement.GetPostitionByCharacter(leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				ls.Position.create(lineNumber, line.indexOf(regexResult[4])),
-				ls.Position.create(lineNumber, line.indexOf(regexResult[4]) + regexResult[4].length)))
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[4])),
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[4]) + regexResult[4].length))
+			),
+			statement: statement
 		};
 
 		if(openProperty.args == null)
@@ -495,30 +603,38 @@ function GetPropertyStart(line: string, lineNumber: number, uri: string) : boole
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.log("ERROR - line " + lineNumber + ": 'end function' or 'end sub' expected!");
+		console.log("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
 }
 
-function GetPropertySymbol(statement: string, lineNumber: number, uri: string) : VBSSymbol[] {
+function GetPropertySymbol(statement: MultiLineStatement, uri: string) : VBSSymbol[] {
+	let line: string = statement.GetFullStatement();
+
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+property[ \t]*$/gi;
 
-	let regexResult = classEndRegex.exec(statement);
+	let regexResult = classEndRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 1)
 		return null;
 
 	if(openProperty == null) {
 		// ERROR!!! I cannot close any property!
-		console.log("ERROR - line " + lineNumber + ": There is no property to end!");
+		console.log("ERROR - line " + statement.startLine + ": There is no property to end!");
 		return null;
 	}
 
 	// range of the whole definition
-	let range: ls.Range = ls.Range.create(openProperty.startPosition, ls.Position.create(lineNumber, GetNumberOfFrontSpaces(statement) + regexResult[0].trim().length))
+	let range: ls.Range = ls.Range.create(
+		openProperty.startPosition, 
+		statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line) + regexResult[0].trim().length)
+	);
+
+	console.log("end property stmnt: " + JSON.stringify(statement));
+	console.log("end property regex: " + JSON.stringify(regexResult));
 	
-	let symbol = new VBSPropertySymbol()
+	let symbol = new VBSPropertySymbol();
 	symbol.visibility = "";
 	symbol.type = openProperty.type;
 	symbol.name = openProperty.name;
@@ -528,14 +644,16 @@ function GetPropertySymbol(statement: string, lineNumber: number, uri: string) :
 	symbol.parentName = openClassName;
 	symbol.symbolRange = range;
 
-	let parametersSymbol = GetParameterSymbols(openProperty.args, openProperty.argsIndex, range.start.line, uri);
+	let parametersSymbol = GetParameterSymbols(openProperty.args, openProperty.argsIndex, openProperty.statement, uri);
 
 	openProperty = null;
 
 	return parametersSymbol.concat(symbol);
 }
 
-function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMemberSymbol {
+function GetMemberSymbol(statement: MultiLineStatement, uri: string) : VBSMemberSymbol {
+	let line: string = statement.GetFullStatement();
+
 	let memberStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
 
@@ -547,7 +665,10 @@ function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMem
 	let intendention = GetNumberOfFrontSpaces(line);
 	let nameStartIndex = line.indexOf(line);
 
-	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let range: ls.Range = ls.Range.create(
+		statement.GetPostitionByCharacter(intendention), 
+		statement.GetPostitionByCharacter(intendention + regexResult[0].trim().length)
+	);
 	
 	let symbol: VBSMemberSymbol = new VBSMemberSymbol();
 	symbol.visibility = visibility;
@@ -557,8 +678,8 @@ function GetMemberSymbol(line: string, lineNumber: number, uri: string) : VBSMem
 	symbol.symbolRange = range;
 	symbol.nameLocation = ls.Location.create(uri, 
 		ls.Range.create(
-			ls.Position.create(lineNumber, nameStartIndex),
-			ls.Position.create(lineNumber, nameStartIndex + name.length)
+			statement.GetPostitionByCharacter(nameStartIndex),
+			statement.GetPostitionByCharacter(nameStartIndex + name.length)
 		)
 	);
 	symbol.parentName = openClassName;
@@ -570,7 +691,9 @@ function GetVariableNamesFromList(vars: string): string[] {
 	return vars.split(',').map(function(s) { return s.trim(); });
 }
 
-function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSVariableSymbol[] {
+function GetVariableSymbol(statement: MultiLineStatement, uri: string) : VBSVariableSymbol[] {
+	let line: string = statement.GetFullStatement();
+
 	let variableSymbols: VBSVariableSymbol[] = [];
 	let memberStartRegex:RegExp = /^[ \t]*(dim[ \t]+)(([a-zA-Z0-9\-\_]+[ \t]*\,[ \t]*)*)([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = memberStartRegex.exec(line);
@@ -603,12 +726,14 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSV
 		symbol.name = varName;
 		symbol.args = "";
 		symbol.nameLocation = ls.Location.create(uri, 
-			GetNameRange(lineNumber, line, varName )
+			GetNameRange(statement, varName )
 		);
+		
 		symbol.symbolRange = ls.Range.create(
-			ls.Position.create(lineNumber, symbol.nameLocation.range.start.character - firstElementOffset), 
-			ls.Position.create(lineNumber, symbol.nameLocation.range.end.character)
+			ls.Position.create(symbol.nameLocation.range.start.line, symbol.nameLocation.range.start.character - firstElementOffset), 
+			ls.Position.create(symbol.nameLocation.range.end.line, symbol.nameLocation.range.end.character)
 		);
+		
 		firstElementOffset = 0;
 		symbol.parentName = parentName;
 		
@@ -618,21 +743,30 @@ function GetVariableSymbol(line: string, lineNumber: number, uri: string) : VBSV
 	return variableSymbols;
 }
 
-function GetNameRange(lineNumber: number, line: string, name: string): ls.Range {
+function GetNameRange(statement: MultiLineStatement, name: string): ls.Range {
+	let line: string = statement.GetFullStatement();
+
 	let findVariableName = new RegExp("(" + name.trim() + "[ \t]*)(\,|$)","gi");
 	let matches = findVariableName.exec(line);
 
 	let rng = ls.Range.create(
-		ls.Position.create(lineNumber, matches.index),
-		ls.Position.create(lineNumber, matches.index + name.trim().length)
-	)
+		statement.GetPostitionByCharacter(matches.index),
+		statement.GetPostitionByCharacter(matches.index + name.trim().length)
+	);
+
+	console.log("in line: " + JSON.stringify(line));
+	console.log("matches: " + JSON.stringify(matches) + " at " + matches.index);
+	console.log("name: " + name);
+	console.log(JSON.stringify(rng));
 
 	return rng;
 }
 
-function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSConstantSymbol {
+function GetConstantSymbol(statement: MultiLineStatement, uri: string) : VBSConstantSymbol {
 	if(openMethod != null || openProperty != null)
 		return null;
+
+	let line: string = statement.GetFullStatement();
 
 	let memberStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?const[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*\=.*$/gi;
 	let regexResult = memberStartRegex.exec(line);
@@ -648,7 +782,10 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSC
 	let intendention = GetNumberOfFrontSpaces(line);
 	let nameStartIndex = line.indexOf(line);
 
-	let range: ls.Range = ls.Range.create(ls.Position.create(lineNumber, intendention), ls.Position.create(lineNumber, intendention + regexResult[0].trim().length))
+	let range: ls.Range = ls.Range.create(
+		statement.GetPostitionByCharacter(intendention), 
+		statement.GetPostitionByCharacter(intendention + regexResult[0].trim().length)
+	);
 	
 	let parentName: string = "";
 	
@@ -669,8 +806,8 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSC
 	symbol.symbolRange = range;
 	symbol.nameLocation = ls.Location.create(uri, 
 		ls.Range.create(
-			ls.Position.create(lineNumber, nameStartIndex),
-			ls.Position.create(lineNumber, nameStartIndex + name.length)
+			statement.GetPostitionByCharacter(nameStartIndex),
+			statement.GetPostitionByCharacter(nameStartIndex + name.length)
 		)
 	);
 	symbol.parentName = parentName;
@@ -678,7 +815,9 @@ function GetConstantSymbol(line: string, lineNumber: number, uri: string) : VBSC
 	return symbol;
 }
 
-function GetClassStart(line: string, lineNumber: number, uri: string) : boolean {
+function GetClassStart(statement: MultiLineStatement, uri: string) : boolean {
+	let line: string = statement.GetFullStatement();
+
 	let classStartRegex:RegExp = /^[ \t]*class[ \t]+([a-zA-Z0-9\-\_]+)[ \t]*$/gi;
 	let regexResult = classStartRegex.exec(line);
 
@@ -687,12 +826,14 @@ function GetClassStart(line: string, lineNumber: number, uri: string) : boolean 
 
 	let name = regexResult[1];
 	openClassName = name;
-	openClassStart = ls.Position.create(lineNumber, 0);
+	openClassStart = statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line));
 
 	return true;
 }
 
-function GetClassSymbol(line: string, lineNumber: number, uri: string) : VBSClassSymbol {
+function GetClassSymbol(statement: MultiLineStatement, uri: string) : VBSClassSymbol {
+	let line: string = statement.GetFullStatement();
+
 	let classEndRegex:RegExp = /^[ \t]*end[ \t]+class[ \t]*$/gi;
 
 	if(openClassName == null)
@@ -705,15 +846,15 @@ function GetClassSymbol(line: string, lineNumber: number, uri: string) : VBSClas
 
 	if(openMethod != null) {
 		// ERROR! expected to close method before!
-		console.log("ERROR - line " + lineNumber + ": 'end " + openMethod.type + "' expected!");
+		console.log("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	if(openProperty != null) {
 		// ERROR! expected to close property before!
-		console.log("ERROR - line " + lineNumber + ": 'end property' expected!");
+		console.log("ERROR - line " + statement.startLine + ": 'end property' expected!");
 	}
 
-	let range: ls.Range = ls.Range.create(openClassStart, ls.Position.create(lineNumber, regexResult[0].length))
+	let range: ls.Range = ls.Range.create(openClassStart, statement.GetPostitionByCharacter(regexResult[0].length))
 	let symbol: VBSClassSymbol = new VBSClassSymbol();
 	symbol.name = openClassName;
 	symbol.nameLocation = ls.Location.create(uri, 
