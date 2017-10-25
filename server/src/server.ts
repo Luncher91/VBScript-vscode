@@ -473,7 +473,7 @@ function GetMethodSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol
 		return null;
 	}
 
-	if(type != openMethod.type) {
+	if(type.toLowerCase() != openMethod.type.toLowerCase()) {
 		// ERROR!!! I expected end function|sub and not sub|function!
 		// show the user the error and then go on like it was the right type!
 		console.log("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
