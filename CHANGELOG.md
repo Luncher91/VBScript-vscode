@@ -1,6 +1,6 @@
 # CHANGELOG
 
-# [UNRELEASED]
+# Version 1.0.0
 
 - performance tweaks
 - method end were not recognized if they were written in a different case (Sub vs. sub)

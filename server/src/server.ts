@@ -196,7 +196,7 @@ function RefreshDocumentsSymbols(uri: string) {
 	let startTime: number = Date.now();
 	let symbolsList: VBSSymbol[] = CollectSymbols(documents.get(uri));
 	symbolCache[uri] = symbolsList;
-	console.log("Refreshed symbols (" + symbolsList.length + ") in " + (Date.now() - startTime) + " ms");
+	console.info("Refreshed symbols (" + symbolsList.length + ") in " + (Date.now() - startTime) + " ms");
 }
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
@@ -270,7 +270,7 @@ class MultiLineStatement {
 				break;
 		}
 
-		console.log("WARNING: cannot resolve " + charIndex + " in me: " + JSON.stringify(this));
+		console.warn("WARNING: cannot resolve " + charIndex + " in me: " + JSON.stringify(this));
 		return null;
 	}
 }
@@ -449,7 +449,7 @@ function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.log("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
+		console.error("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
@@ -469,14 +469,14 @@ function GetMethodSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol
 
 	if(openMethod == null) {
 		// ERROR!!! I cannot close any method!
-		console.log("ERROR - line " + statement.startLine + ": There is no " + type + " to end!");
+		console.error("ERROR - line " + statement.startLine + ": There is no " + type + " to end!");
 		return null;
 	}
 
 	if(type.toLowerCase() != openMethod.type.toLowerCase()) {
 		// ERROR!!! I expected end function|sub and not sub|function!
 		// show the user the error and then go on like it was the right type!
-		console.log("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
+		console.error("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	let range: ls.Range = ls.Range.create(openMethod.startPosition, statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
@@ -609,7 +609,7 @@ function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean 
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.log("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
+		console.error("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
 	}
 
 	return false;
@@ -627,7 +627,7 @@ function GetPropertySymbol(statement: MultiLineStatement, uri: string) : VBSSymb
 
 	if(openProperty == null) {
 		// ERROR!!! I cannot close any property!
-		console.log("ERROR - line " + statement.startLine + ": There is no property to end!");
+		console.error("ERROR - line " + statement.startLine + ": There is no property to end!");
 		return null;
 	}
 
@@ -844,12 +844,12 @@ function GetClassSymbol(statement: MultiLineStatement, uri: string) : VBSClassSy
 
 	if(openMethod != null) {
 		// ERROR! expected to close method before!
-		console.log("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
+		console.error("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	if(openProperty != null) {
 		// ERROR! expected to close property before!
-		console.log("ERROR - line " + statement.startLine + ": 'end property' expected!");
+		console.error("ERROR - line " + statement.startLine + ": 'end property' expected!");
 	}
 
 	let range: ls.Range = ls.Range.create(openClassStart, statement.GetPostitionByCharacter(regexResult[0].length))

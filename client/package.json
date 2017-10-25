@@ -4,7 +4,7 @@
   "description": "VBScript symbol support",
   "author": "Andreas Lenzen",
   "license": "MIT",
-  "version": "0.0.7",
+  "version": "1.0.0",
   "publisher": "andreaslenzen",
   "repository": {
     "type": "git",
