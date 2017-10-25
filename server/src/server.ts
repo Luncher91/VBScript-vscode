@@ -193,16 +193,18 @@ function PositionInRange(range: ls.Range, position: ls.Position): boolean {
 
 let symbolCache: { [id: string] : VBSSymbol[]; } = {};
 function RefreshDocumentsSymbols(uri: string) {
-	let symbolsList: VBSSymbol[] = [];
-	CollectSymbols(documents.get(uri), symbolsList);
+	let startTime: number = Date.now();
+	let symbolsList: VBSSymbol[] = CollectSymbols(documents.get(uri));
 	symbolCache[uri] = symbolsList;
+	console.log("Refreshed symbols (" + symbolsList.length + ") in " + (Date.now() - startTime) + " ms");
 }
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
 	return GetSymbolsOfDocument(docParams.textDocument.uri);
 });
 
-function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
+function CollectSymbols(document: ls.TextDocument): VBSSymbol[] {
+	let symbols: Set<VBSSymbol> = new Set<VBSSymbol>();
 	let lines = document.getText().split(/\r?\n/g);
 
 	let startMultiLine: number = -1;
@@ -229,20 +231,14 @@ function CollectSymbols(document: ls.TextDocument, symbols: VBSSymbol[]): void {
 		let statements = SplitStatements(multiLines, startMultiLine);
 
 		statements.forEach(statement => {
-			let newSymbols = FindSymbol(statement, document.uri);
-
-			for (var j = 0; j < newSymbols.length; j++) {
-				var newSym = newSymbols[j];
-				
-				if(newSym != null) {
-					symbols.push(newSym);
-				}
-			}
+			FindSymbol(statement, document.uri, symbols);
 		});
 
 		startMultiLine =-1;
 		multiLines = [];
 	}
+
+	return Array.from(symbols);
 }
 
 class MultiLineStatement {
@@ -304,7 +300,6 @@ function SplitStatements(lines: string[], startLineIndex: number): MultiLineStat
 				statement.lines.push(st);
 				
 				if(j == sts.length-1) {
-					//charOffset += st.length;
 					break;
 				}
 				
@@ -342,44 +337,61 @@ function ReplaceBySpaces(match: string) : string {
 	return " ".repeat(match.length);
 }
 
-function FindSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol[] {
+function AddArrayToSet(s: Set<any>, a: any[]) {
+	a.forEach(element => {
+		s.add(element);
+	});
+}
+
+function FindSymbol(statement: MultiLineStatement, uri: string, symbols: Set<VBSSymbol>) : void {
 	let newSym: VBSSymbol;
 	let newSyms: VBSVariableSymbol[] = null;
 
-	if(GetMethodStart(statement, uri))
-		return [];
+	if(GetMethodStart(statement, uri)) {
+		return;
+	}
 
 	newSyms = GetMethodSymbol(statement, uri);
-	if(newSyms != null && newSyms.length != 0)
-		return newSyms;
+	if(newSyms != null && newSyms.length != 0) {
+		AddArrayToSet(symbols, newSyms);
+		return;
+	}
 
 	if(GetPropertyStart(statement, uri))
-		return [];
+		return;
 
 	newSyms = GetPropertySymbol(statement, uri);;
-	if(newSyms != null && newSyms.length != 0)
-		return newSyms;
+	if(newSyms != null && newSyms.length != 0) {
+		AddArrayToSet(symbols, newSyms);
+		return;
+	}
 
 	if(GetClassStart(statement, uri))
-		return [];
+		return;
 
 	newSym = GetClassSymbol(statement, uri);
-	if(newSym != null)
-		return [newSym];
+	if(newSym != null) {
+		symbols.add(newSym);
+		return;
+	}
 
 	newSym = GetMemberSymbol(statement, uri);
-	if(newSym != null)
-		return [newSym];
+	if(newSym != null) {
+		symbols.add(newSym);
+		return;
+	}
 
 	newSyms = GetVariableSymbol(statement, uri);
-	if(newSyms != null && newSyms.length != 0)
-		return newSyms;
+	if(newSyms != null && newSyms.length != 0) {
+		AddArrayToSet(symbols, newSyms);
+		return;
+	}
 
 	newSym = GetConstantSymbol(statement, uri);
-	if(newSym != null)
-		return [newSym];
-
-	return [];
+	if(newSym != null) {
+		symbols.add(newSym);
+		return;
+	}
 }
 
 let openClassName : string = null;
