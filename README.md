@@ -18,14 +18,7 @@ You can display symbols by using extensions like "Code Outline" by Patryk Zawadz
 - Parameters
 
 ## Known issues
-
-## Fixed issues
-
-- Indentation using tab
-- Dim with multiple definitions recognition
-- parameters are not recognized as symbols
-- A multiline (seperated by an underscore _ ) definition will not be recognized.
-
+none
 ---
 
 [GitHub](https://github.com/Luncher91/VBScript-vscode)
