@@ -18,7 +18,7 @@ You can display symbols by using extensions like "Code Outline" by Patryk Zawadz
 - Parameters
 
 ## Known issues
-none
+
 ---
 
 [GitHub](https://github.com/Luncher91/VBScript-vscode)
