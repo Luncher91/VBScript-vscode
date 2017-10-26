@@ -573,7 +573,7 @@ let openProperty: OpenProperty = null;
 function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean {
 	let line: string = statement.GetFullStatement();
 
-	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
+	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(default[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -582,7 +582,7 @@ function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean 
 	let leadingSpaces = GetNumberOfFrontSpaces(line);
 	let preLength = leadingSpaces + regexResult.index;
 	
-	for (var i = 1; i < 6; i++) {
+	for (var i = 1; i < 7; i++) {
 		var resElement = regexResult[i];
 		if(resElement != null)
 			preLength += resElement.length;
@@ -591,14 +591,14 @@ function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean 
 	if(openProperty == null) {
 		openProperty = {
 			visibility: regexResult[1],
-			type: regexResult[3],
-			name: regexResult[4],
+			type: regexResult[4],
+			name: regexResult[5],
 			argsIndex: preLength + 1,
-			args: regexResult[7],
+			args: regexResult[8],
 			startPosition: statement.GetPostitionByCharacter(leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				statement.GetPostitionByCharacter(line.indexOf(regexResult[4])),
-				statement.GetPostitionByCharacter(line.indexOf(regexResult[4]) + regexResult[4].length))
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[5])),
+				statement.GetPostitionByCharacter(line.indexOf(regexResult[5]) + regexResult[5].length))
 			),
 			statement: statement
 		};

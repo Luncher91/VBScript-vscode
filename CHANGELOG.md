@@ -1,5 +1,9 @@
 # CHANGELOG
 
+# Version 1.0.1
+
+- fixed issue: Default property #10
+
 # Version 1.0.0
 
 - performance tweaks
