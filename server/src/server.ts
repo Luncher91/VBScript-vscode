@@ -196,7 +196,7 @@ function RefreshDocumentsSymbols(uri: string) {
 	let startTime: number = Date.now();
 	let symbolsList: VBSSymbol[] = CollectSymbols(documents.get(uri));
 	symbolCache[uri] = symbolsList;
-	console.info("Refreshed symbols (" + symbolsList.length + ") in " + (Date.now() - startTime) + " ms");
+	console.info("Found " + symbolsList.length + " symbols in '" + uri + "': " + (Date.now() - startTime) + " ms");
 }
 
 connection.onDocumentSymbol((docParams: ls.DocumentSymbolParams): ls.SymbolInformation[] => {
@@ -413,7 +413,7 @@ let openMethod: OpenMethod = null;
 function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
 	let line = statement.GetFullStatement();
 
-	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)([ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
+	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)([ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t(\(\))]*)\))?[ \t]*$/gi;
 	let regexResult = rex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -449,7 +449,7 @@ function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.error("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	return false;
@@ -469,14 +469,14 @@ function GetMethodSymbol(statement: MultiLineStatement, uri: string) : VBSSymbol
 
 	if(openMethod == null) {
 		// ERROR!!! I cannot close any method!
-		console.error("ERROR - line " + statement.startLine + ": There is no " + type + " to end!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": There is no " + type + " to end!");
 		return null;
 	}
 
 	if(type.toLowerCase() != openMethod.type.toLowerCase()) {
 		// ERROR!!! I expected end function|sub and not sub|function!
 		// show the user the error and then go on like it was the right type!
-		console.error("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	let range: ls.Range = ls.Range.create(openMethod.startPosition, statement.GetPostitionByCharacter(GetNumberOfFrontSpaces(line) + regexResult[0].trim().length))
@@ -573,7 +573,7 @@ let openProperty: OpenProperty = null;
 function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean {
 	let line: string = statement.GetFullStatement();
 
-	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(default[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t]*)\))?[ \t]*$/gi;
+	let propertyStartRegex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(default[ \t]+)?(property[ \t]+)(let[ \t]+|set[ \t]+|get[ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t(\(\))]*)\))?[ \t]*$/gi;
 	let regexResult = propertyStartRegex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -609,7 +609,7 @@ function GetPropertyStart(statement: MultiLineStatement, uri: string) : boolean 
 		return true;
 	} else {
 		// ERROR!!! I expected "end function|sub"!
-		console.error("ERROR - line " + statement.startLine + ": 'end function' or 'end sub' expected!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": 'end property' expected!");
 	}
 
 	return false;
@@ -627,7 +627,7 @@ function GetPropertySymbol(statement: MultiLineStatement, uri: string) : VBSSymb
 
 	if(openProperty == null) {
 		// ERROR!!! I cannot close any property!
-		console.error("ERROR - line " + statement.startLine + ": There is no property to end!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": There is no property to end!");
 		return null;
 	}
 
@@ -844,12 +844,12 @@ function GetClassSymbol(statement: MultiLineStatement, uri: string) : VBSClassSy
 
 	if(openMethod != null) {
 		// ERROR! expected to close method before!
-		console.error("ERROR - line " + statement.startLine + ": 'end " + openMethod.type + "' expected!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": 'end " + openMethod.type + "' expected!");
 	}
 
 	if(openProperty != null) {
 		// ERROR! expected to close property before!
-		console.error("ERROR - line " + statement.startLine + ": 'end property' expected!");
+		console.error("ERROR - line " + statement.startLine + " at " + statement.startCharacter + ": 'end property' expected!");
 	}
 
 	let range: ls.Range = ls.Range.create(openClassStart, statement.GetPostitionByCharacter(regexResult[0].length))

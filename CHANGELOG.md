@@ -1,5 +1,12 @@
 # CHANGELOG
 
+# Version 1.0.2
+
+- corrected error message for (end property expected)
+- added filename to 'refreshed symbols' log message
+- added start character to error messages
+- added support for array arguments
+
 # Version 1.0.1
 
 - fixed issue: Default property #10
