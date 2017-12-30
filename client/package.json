@@ -29,9 +29,12 @@
     "VBS", "VBScript", "Language", "Symbol", "Functionlist"
   ],
   "activationEvents": [
-    "onLanguage:vbs"
+    "onLanguage:vb",
+    "onLanguage:vba",
+    "onLanguage:vbs",
+    "onLanguage:vbscript"
   ],
-  "main": "./out/src/extension",
+  "main": "./out/extension",
   "contributes": {
 	  "languages": [
 		  {
@@ -40,10 +43,6 @@
 				  "VBScript",
 				  "vbscript",
 				  "VBS"
-			  ],
-			  "extensions": [
-				  ".vbs",
-				  ".wsf"
 			  ]
 		  }
 	  ],
@@ -71,11 +70,11 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "devDependencies": {
-    "@types/node": "^8.0.26",
-    "typescript": "^2.1.5",
-    "vscode": "^1.0.3"
+    "@types/node": "8.0.26",
+    "typescript": "2.1.5",
+    "vscode": "1.0.3"
   },
   "dependencies": {
-    "vscode-languageclient": "^3.1.0"
+    "vscode-languageclient": "3.1.0"
   }
 }
