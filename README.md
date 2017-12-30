@@ -32,8 +32,5 @@ I would like to see a VBScript debugger built in into this extension. This will 
 
 I would appreciate if the regular expressions of mine will be superseded someday by a formal grammar. A popular possibility would be ANTLR. I hope that this would make it a bit faster, more reliable and much easier to read.
 
-## Known issues
-
----
 
 [GitHub](https://github.com/Luncher91/VBScript-vscode)
