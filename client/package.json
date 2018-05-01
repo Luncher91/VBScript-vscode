@@ -20,7 +20,7 @@
   },
   "icon": "resources/vbs.png",
   "engines": {
-    "vscode": "^1.8.0"
+    "vscode": "^1.18.0"
   },
   "categories": [
     "Languages", "Linters"
@@ -70,11 +70,11 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "devDependencies": {
-    "@types/node": "8.0.26",
-    "typescript": "2.1.5",
-    "vscode": "1.0.3"
+    "@types/node": "^8.0.26",
+    "typescript": "^2.1.5",
+    "vscode": "^1.0.3"
   },
   "dependencies": {
-    "vscode-languageclient": "3.1.0"
+    "vscode-languageclient": "^3.1.0"
   }
 }
