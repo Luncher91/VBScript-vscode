@@ -6,7 +6,8 @@
     </linearGradient>
   </defs>
   <!--<rect x="0" y="0" width="32" height="32" fill-opacity="1" fill="#888888" />-->
-  <circle cx="16" cy="16" r="16" fill-opacity="1" fill="#2f5268" />
+  <circle cx="16" cy="16" r="16" fill-opacity="1" fill="#FFF" />
+  <circle cx="16" cy="16" r="15.3" fill-opacity="1" fill="#333" />
   <g transform="translate(1,3)"> 
     <g transform="scale(0.8)">
       <circle cx="26" cy="5" r="3" fill="rgb(0,220,220)" />
