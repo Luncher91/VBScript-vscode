@@ -23,7 +23,7 @@
     "vscode": "^1.18.0"
   },
   "categories": [
-    "Languages", "Linters"
+    "Language Packs"
   ],
   "keywords": [
     "VBS", "VBScript", "Language", "Symbol", "Functionlist"
