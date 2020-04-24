@@ -5,8 +5,8 @@
   "author": "Andreas Lenzen",
   "license": "MIT",
   "engines": {
-    "node": "*"
-  },
+		"vscode": "^1.43.0"
+	},
   "dependencies": {
     "vscode-languageserver": "^3.1.0",
     "@types/node": "^8.0.26"

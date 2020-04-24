@@ -4,7 +4,7 @@
   "description": "VBScript symbol support",
   "author": "Andreas Lenzen",
   "license": "MIT",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "publisher": "andreaslenzen",
   "repository": {
     "type": "git",
@@ -26,13 +26,14 @@
     "Language Packs"
   ],
   "keywords": [
-    "VBS", "VBScript", "Language", "Symbol", "Functionlist"
+    "VBS", "VBScript", "Language", "Symbol", "Functionlist", "ASP"
   ],
   "activationEvents": [
     "onLanguage:vb",
     "onLanguage:vba",
     "onLanguage:vbs",
-    "onLanguage:vbscript"
+    "onLanguage:vbscript",
+    "onLanguage:asp"
   ],
   "main": "./out/extension",
   "contributes": {
