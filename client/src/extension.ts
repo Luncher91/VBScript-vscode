@@ -14,7 +14,7 @@ export function activate(context: ExtensionContext) {
 	}
 
 	let clientOptions: LanguageClientOptions = {
-		documentSelector: ['vbs', 'vb', 'vbscript', 'vba'],
+		documentSelector: ['asp','vbs', 'vb', 'vbscript', 'vba'],
 		synchronize: {
 			configurationSection: 'vbsLanguageServer',
 			fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
