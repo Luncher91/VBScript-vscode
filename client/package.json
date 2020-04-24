@@ -26,7 +26,12 @@
     "Language Packs"
   ],
   "keywords": [
-    "VBS", "VBScript", "Language", "Symbol", "Functionlist", "ASP"
+    "VBS",
+    "VBScript",
+    "Language",
+    "Symbol",
+    "Functionlist",
+    "ASP"
   ],
   "activationEvents": [
     "onLanguage:vb",
@@ -37,16 +42,16 @@
   ],
   "main": "./out/extension",
   "contributes": {
-	  "languages": [
-		  {
-			  "id": "vbs",
-			  "aliases": [
-				  "VBScript",
-				  "vbscript",
-				  "VBS"
-			  ]
-		  }
-	  ],
+    "languages": [
+      {
+        "id": "vbs",
+        "aliases": [
+          "VBScript",
+          "vbscript",
+          "VBS"
+        ]
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "VBScript language configuration",
