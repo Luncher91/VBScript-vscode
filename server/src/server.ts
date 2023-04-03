@@ -413,7 +413,7 @@ let openMethod: OpenMethod = null;
 function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
 	let line = statement.GetFullStatement();
 
-	let rex:RegExp = /^[ \t]*(public[ \t]+|private[ \t]+)?(function|sub)([ \t]+)([a-zA-Z0-9\-\_]+)([ \t]*)(\(([a-zA-Z0-9\_\-, \t(\(\))]*)\))?[ \t]*$/gi;
+	let rex:RegExp = /^\s*(?<visibility>public\s+|private\s+)?(?<type>function|sub)(\s+)(?<name>[a-zA-Z0-9\-\_]+)(\s*)(?<args>\(.*\))?\s*$/gi;
 	let regexResult = rex.exec(line);
 
 	if(regexResult == null || regexResult.length < 6)
@@ -430,15 +430,15 @@ function GetMethodStart(statement: MultiLineStatement, uri: string): boolean {
 		}
 
 		openMethod = {
-			visibility: regexResult[1],
-			type: regexResult[2],
-			name: regexResult[4],
+			visibility: regexResult.groups.visibility,
+			type: regexResult.groups.type,
+			name: regexResult.groups.name,
 			argsIndex: preLength + 1, // opening bracket
-			args: regexResult[7],
+			args: regexResult.groups.args,
 			startPosition: statement.GetPostitionByCharacter(leadingSpaces),
 			nameLocation: ls.Location.create(uri, ls.Range.create(
-				statement.GetPostitionByCharacter(line.indexOf(regexResult[3])),
-				statement.GetPostitionByCharacter(line.indexOf(regexResult[3]) + regexResult[3].length))
+				statement.GetPostitionByCharacter(line.indexOf(regexResult.groups.name)),
+				statement.GetPostitionByCharacter(line.indexOf(regexResult.groups.name) + regexResult.groups.name.length))
 			),
 			statement: statement
 		};
